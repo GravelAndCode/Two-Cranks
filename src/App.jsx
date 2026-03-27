@@ -281,7 +281,7 @@ function ShareModal({ items, currentListName, onClose }) {
     <div style={S.modalOverlay} onClick={onClose}>
       <div style={S.modalBox} onClick={e => e.stopPropagation()}>
         <div style={S.modalTitle}>🔗 Share Your Kit</div>
-        <div style={S.modalSub}>Send this link to your riding partner. They'll see your kit alongside theirs with duplicates flagged.</div>
+        <div style={S.modalSub}>Send this link to your friend. They'll see your kit alongside theirs with duplicates flagged.</div>
         <div style={S.label}>YOUR KIT LABEL</div>
         <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Jordan's Kit" style={{ ...S.input, marginBottom: 16 }} />
         <div style={S.label}>SHAREABLE LINK</div>
@@ -462,7 +462,7 @@ function FriendsModal({ user, onClose }) {
   return (
     <div style={S.modalOverlay} onClick={onClose}>
       <div style={S.modalBox} onClick={e => e.stopPropagation()}>
-        <div style={S.modalTitle}>👥 Riding Partners</div>
+        <div style={S.modalTitle}>👥 Friends</div>
 
         {/* Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid rgba(160,80,20,0.25)", marginBottom: 20, marginTop: 4 }}>
@@ -482,9 +482,9 @@ function FriendsModal({ user, onClose }) {
               Your friend needs to have signed into Two Cranks first. If they haven't yet, switch to the <span onClick={() => setTab("invite")} style={{ color: "#50a878", cursor: "pointer", textDecoration: "underline" }}>Invite tab</span> to send them a link.
             </div>
             {msg && <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, color: msg.type === "error" ? "#e07050" : "#50d898", marginBottom: 14 }}>{msg.text}</div>}
-            <div style={S.label}>YOUR PARTNERS</div>
+            <div style={S.label}>YOUR FRIENDS</div>
             {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading...</div> :
-              friends.length === 0 ? <div style={{ color: "#806040", fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13 }}>No riding partners added yet</div> :
+              friends.length === 0 ? <div style={{ color: "#806040", fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13 }}>No friends added yet</div> :
                 friends.map(f => (
                   <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid rgba(160,80,20,0.2)" }}>
                     <div style={{ flex: 1 }}>
@@ -574,7 +574,7 @@ function ShareItemModal({ item, listName, user, onClose }) {
         <div style={S.modalTitle}>🤝 Share Item</div>
         <div style={S.modalSub}>Share <strong style={{ color: "#f5e8cc" }}>{item.name}</strong> from your <strong style={{ color: "#f5e8cc" }}>{listName || "kit"}</strong></div>
         <div style={S.label}>SEND TO</div>
-        {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading partners...</div> :
+        {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading friends...</div> :
           friends.length === 0 ? (
             <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", color: "#806040", fontSize: 13 }}>No friends added yet. Add one in the Friends section first.</div>
           ) : (
@@ -1135,7 +1135,7 @@ function MainApp({ user }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               {/* User avatar */}
               {user.user_metadata?.avatar_url && <img src={user.user_metadata.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(220,150,60,0.4)" }} />}
-              <button onClick={() => setFriendsOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>👥 Partners</button>
+              <button onClick={() => setFriendsOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>👥 Friends</button>
               {currentList && items.length > 0 && (
                 <button onClick={() => setPackMode(true)} style={{ background: "rgba(60,40,100,0.6)", border: "1px solid rgba(150,100,220,0.4)", color: "#c0a0f0", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>🎒 Pack Mode</button>
               )}
@@ -1341,7 +1341,7 @@ function MainApp({ user }) {
                             </div>
                             {!item.essential && <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 9, color: "#906040", border: "1px solid #5a3010", padding: "2px 7px", borderRadius: 10, flexShrink: 0 }}>optional</span>}
                             <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 13, fontWeight: 600, color: col.text, minWidth: 60, textAlign: "right", flexShrink: 0 }}><WeightDisplay oz={itemOz} /></span>
-                            <button className="action-btn" onClick={() => setShareItemTarget(item)} title="Share with riding partner"
+                            <button className="action-btn" onClick={() => setShareItemTarget(item)} title="Share with a friend"
                               style={{ background: "rgba(30,70,50,0.8)", border: "1px solid #2a7058", color: "#50c888", padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 11 }}>share</button>
                             <button className="action-btn" onClick={() => editItem(item)}
                               style={{ background: "rgba(70,35,10,0.8)", border: "1px solid #7a4818", color: "#d4903a", padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 11 }}>edit</button>
