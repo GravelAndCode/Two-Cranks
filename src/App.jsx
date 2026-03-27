@@ -437,7 +437,7 @@ function FriendsModal({ user, onClose }) {
   return (
     <div style={S.modalOverlay} onClick={onClose}>
       <div style={S.modalBox} onClick={e => e.stopPropagation()}>
-        <div style={S.modalTitle}>👥 Riding Partners</div>
+        <div style={S.modalTitle}>👥 Friends</div>
         <div style={S.modalSub}>Add friends by their email to share gear items with them</div>
         <div style={S.label}>ADD BY EMAIL</div>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -446,9 +446,9 @@ function FriendsModal({ user, onClose }) {
           <button onClick={addFriend} disabled={adding} style={{ ...S.btnPrimary, flexShrink: 0 }}>Add</button>
         </div>
         {msg && <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, color: msg.type === "error" ? "#e07050" : "#50d898", marginBottom: 14 }}>{msg.text}</div>}
-        <div style={S.label}>YOUR PARTNERS</div>
+        <div style={S.label}>YOUR FRIENDS</div>
         {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading...</div> :
-          friends.length === 0 ? <div style={{ color: "#806040", fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13 }}>No riding partners added yet</div> :
+          friends.length === 0 ? <div style={{ color: "#806040", fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13 }}>No friends added yet</div> :
             friends.map(f => (
               <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid rgba(160,80,20,0.2)" }}>
                 <div style={{ flex: 1 }}>
@@ -518,7 +518,7 @@ function ShareItemModal({ item, listName, user, onClose }) {
         <div style={S.label}>SEND TO</div>
         {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading partners...</div> :
           friends.length === 0 ? (
-            <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", color: "#806040", fontSize: 13 }}>No riding partners yet. Add one in the Friends section first.</div>
+            <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", color: "#806040", fontSize: 13 }}>No friends added yet. Add one in the Friends section first.</div>
           ) : (
             friends.map(f => (
               <div key={f.id} onClick={() => setSelected(f.friend_id)}
@@ -716,19 +716,22 @@ function MainApp({ user }) {
   async function addCustomZone() {
     const name = customZoneInput.trim();
     if (!name) return;
-    const allZones = [...STORAGE_ZONES, ...customZones];
-    if (allZones.map(z => z.toLowerCase()).includes(name.toLowerCase())) {
+    const allZoneNames = [...STORAGE_ZONES, ...customZones];
+    if (allZoneNames.map(z => z.toLowerCase()).includes(name.toLowerCase())) {
       notify("That bag already exists");
       return;
     }
     const { error } = await supabase.from("custom_zones").insert({ user_id: user.id, zone_name: name });
-    if (!error) {
-      setCustomZones(prev => [...prev, name]);
-      setForm(f => ({ ...f, zone: name }));
-      setShowCustomZoneInput(false);
-      setCustomZoneInput("");
-      notify(`"${name}" added as a bag ✓`);
+    if (error) {
+      console.error("Custom zone insert error:", error);
+      notify(`Error saving bag: ${error.message}`);
+      return;
     }
+    setCustomZones(prev => [...prev, name]);
+    setForm(f => ({ ...f, zone: name }));
+    setShowCustomZoneInput(false);
+    setCustomZoneInput("");
+    notify(`"${name}" added ✓`);
   }
 
   async function removeCustomZone(zoneName) {
@@ -815,10 +818,10 @@ function MainApp({ user }) {
     };
     if (editId) {
       const { error } = await supabase.from("items").update(itemData).eq("id", editId);
-      if (error) { notify("Error updating item"); return; }
+      if (error) { console.error("Item update error:", error); notify(`Error updating: ${error.message}`); return; }
     } else {
       const { error } = await supabase.from("items").insert(itemData);
-      if (error) { notify("Error adding item"); return; }
+      if (error) { console.error("Item insert error:", error); notify(`Error adding: ${error.message}`); return; }
     }
     await fetchItems(listId);
   }
@@ -907,7 +910,9 @@ function MainApp({ user }) {
         .pill-btn:hover { filter:brightness(1.1); transform:translateY(-1px); }
         .zone-btn { width:100%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; border-radius:14px; padding:13px 18px; transition:filter 0.15s; }
         .zone-btn:hover { filter:brightness(1.08); }
-        option { background: #3a2008; color: #f5e8cc; }
+        option { background: #2e1a08; color: #f5e0b8; }
+        optgroup { background: #2e1a08; color: #f0a030; font-style: normal; font-weight: 600; }
+        optgroup { background: #2a1505; color: #f0a030; font-style: normal; font-weight: 600; }
       `}</style>
 
       {/* Mountain silhouette bg */}
@@ -938,13 +943,13 @@ function MainApp({ user }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               {/* User avatar */}
               {user.user_metadata?.avatar_url && <img src={user.user_metadata.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(220,150,60,0.4)" }} />}
-              <button onClick={() => setFriendsOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>👥 Partners</button>
-              <button onClick={() => setShareOpen(true)} style={{ background: "rgba(30,80,55,0.8)", border: "1px solid #2a9068", color: "#60d898", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif', fontWeight: 600" }}>🔗 Share Kit</button>
+              <button onClick={() => setFriendsOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>👥 Friends</button>
+              <button onClick={() => setShareOpen(true)} style={{ background: "rgba(30,80,55,0.8)", border: "1px solid #2a9068", color: "#60d898", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>🔗 Share Kit</button>
               <button onClick={() => setLoadOpen(true)} style={S.btnSecondary}>Load</button>
               <button onClick={() => { setNewListName(currentList?.name || ""); setSaveOpen(true); }} style={S.btnPrimary}>Save List</button>
               {currentList && <button onClick={duplicateList} style={{ ...S.btnGhost, fontSize: 11 }} title="Duplicate list">⧉</button>}
               <button onClick={() => { setCurrentList(null); setItems([]); setForm(emptyForm); }} style={{ ...S.btnGhost, fontSize: 11 }}>New</button>
-              <button onClick={() => supabase.auth.signOut()} style={{ ...S.btnGhost, fontSize: 11, color: "#806040" }}>Sign out</button>
+              <button onClick={() => supabase.auth.signOut()} style={{ background: "rgba(100,50,20,0.7)", border: "1px solid rgba(220,140,60,0.4)", color: "#f0c878", padding: "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>Sign out</button>
             </div>
           </div>
         </div>
