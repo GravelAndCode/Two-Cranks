@@ -157,6 +157,8 @@ const S = {
 // ── Login Screen ──────────────────────────────────────────────────────────────
 function LoginScreen() {
   const [loading, setLoading] = useState(false);
+  const inviter = new URLSearchParams(window.location.search).get("invite");
+
   const handleLogin = async () => {
     setLoading(true);
     await supabase.auth.signInWithOAuth({
@@ -167,10 +169,20 @@ function LoginScreen() {
   return (
     <div style={{ ...S.page, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Josefin+Sans:wght@300;400;600&display=swap');`}</style>
-      <div style={{ textAlign: "center", padding: 40 }}>
+      <div style={{ textAlign: "center", padding: 40, maxWidth: 400 }}>
         <div style={{ fontSize: 56, marginBottom: 16 }}>🚲</div>
         <div style={{ fontFamily: "'Lora', serif", fontSize: 36, fontWeight: 700, color: "#f0a030", marginBottom: 6 }}>Two Cranks</div>
-        <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#50a878", letterSpacing: "3px", marginBottom: 40 }}>GEAR PLANNER</div>
+        <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#50a878", letterSpacing: "3px", marginBottom: inviter ? 20 : 40 }}>GEAR PLANNER</div>
+        {inviter && (
+          <div style={{ background: "rgba(40,90,60,0.6)", border: "1px solid rgba(60,180,120,0.35)", borderRadius: 14, padding: "14px 20px", marginBottom: 28, textAlign: "left" }}>
+            <div style={{ fontFamily: "'Lora', serif", fontSize: 16, fontWeight: 600, color: "#60d898", marginBottom: 6 }}>
+              🤝 You've been invited!
+            </div>
+            <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, color: "#a0d8b8", lineHeight: 1.5 }}>
+              <strong style={{ color: "#f5e8cc" }}>{decodeURIComponent(inviter)}</strong> invited you to Two Cranks — a bikepacking gear planner. Sign in with Google to get started.
+            </div>
+          </div>
+        )}
         <button onClick={handleLogin} disabled={loading}
           style={{ background: "#fff", border: "none", color: "#3a2008", padding: "14px 32px", borderRadius: 30, cursor: "pointer", fontSize: 15, fontWeight: 600, fontFamily: "'Josefin Sans', sans-serif", display: "flex", alignItems: "center", gap: 12, margin: "0 auto", boxShadow: "0 4px 20px rgba(0,0,0,0.3)" }}>
           <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
@@ -374,20 +386,21 @@ function AICheckModal({ items, onAddItem, onClose }) {
 
 // ── Friends Modal ─────────────────────────────────────────────────────────────
 function FriendsModal({ user, onClose }) {
+  const [tab, setTab] = useState("connect"); // "connect" | "invite"
   const [friends, setFriends] = useState([]);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
+
+  const inviteUrl = `${window.location.origin}?invite=${encodeURIComponent(user.user_metadata?.full_name || user.email)}`;
 
   useEffect(() => { fetchFriends(); }, []);
 
   async function fetchFriends() {
     setLoading(true);
-    const { data } = await supabase
-      .from("friends")
-      .select("*")
-      .eq("user_id", user.id);
+    const { data } = await supabase.from("friends").select("*").eq("user_id", user.id);
     setFriends(data || []);
     setLoading(false);
   }
@@ -396,15 +409,13 @@ function FriendsModal({ user, onClose }) {
     if (!email.trim()) return;
     setAdding(true);
     setMsg(null);
-    // Look up user by email in profiles table
     const { data: profile } = await supabase
       .from("profiles")
       .select("id, email, full_name")
       .eq("email", email.trim().toLowerCase())
       .single();
-
     if (!profile) {
-      setMsg({ type: "error", text: "No user found with that email. They need to sign in to Two Cranks first." });
+      setMsg({ type: "error", text: "No user found with that email. Send them an invite link first!" });
       setAdding(false);
       return;
     }
@@ -434,31 +445,78 @@ function FriendsModal({ user, onClose }) {
     fetchFriends();
   }
 
+  function copyInvite() {
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2500);
+    });
+  }
+
+  const TabBtn = ({ id, label }) => (
+    <button onClick={() => { setTab(id); setMsg(null); }}
+      style={{ flex: 1, background: tab === id ? "rgba(60,180,120,0.2)" : "transparent", border: "none", borderBottom: `2px solid ${tab === id ? "#3aaa78" : "transparent"}`, color: tab === id ? "#50d898" : "#806040", padding: "10px", cursor: "pointer", fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, fontWeight: tab === id ? 600 : 400, letterSpacing: "0.5px", transition: "all 0.15s" }}>
+      {label}
+    </button>
+  );
+
   return (
     <div style={S.modalOverlay} onClick={onClose}>
       <div style={S.modalBox} onClick={e => e.stopPropagation()}>
-        <div style={S.modalTitle}>👥 Friends</div>
-        <div style={S.modalSub}>Add friends by their email to share gear items with them</div>
-        <div style={S.label}>ADD BY EMAIL</div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && addFriend()}
-            placeholder="dalton@email.com" style={{ ...S.input, flex: 1 }} />
-          <button onClick={addFriend} disabled={adding} style={{ ...S.btnPrimary, flexShrink: 0 }}>Add</button>
+        <div style={S.modalTitle}>👥 Riding Partners</div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", borderBottom: "1px solid rgba(160,80,20,0.25)", marginBottom: 20, marginTop: 4 }}>
+          <TabBtn id="connect" label="Connect a Friend" />
+          <TabBtn id="invite" label="Invite Someone" />
         </div>
-        {msg && <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, color: msg.type === "error" ? "#e07050" : "#50d898", marginBottom: 14 }}>{msg.text}</div>}
-        <div style={S.label}>YOUR FRIENDS</div>
-        {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading...</div> :
-          friends.length === 0 ? <div style={{ color: "#806040", fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13 }}>No friends added yet</div> :
-            friends.map(f => (
-              <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid rgba(160,80,20,0.2)" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: "'Lora', serif", fontSize: 14, color: "#f5e8cc" }}>{f.friend_name}</div>
-                  <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040" }}>{f.friend_email}</div>
-                </div>
-                <button onClick={() => removeFriend(f.id)} style={{ background: "rgba(80,20,10,0.7)", border: "1px solid #7a2010", color: "#e06040", padding: "5px 10px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>Remove</button>
-              </div>
-            ))
-        }
+
+        {tab === "connect" && (
+          <>
+            <div style={S.label}>ADD BY EMAIL</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && addFriend()}
+                placeholder="dalton@email.com" style={{ ...S.input, flex: 1 }} />
+              <button onClick={addFriend} disabled={adding} style={{ ...S.btnPrimary, flexShrink: 0 }}>Add</button>
+            </div>
+            <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", marginBottom: 16, lineHeight: 1.5 }}>
+              Your friend needs to have signed into Two Cranks first. If they haven't yet, switch to the <span onClick={() => setTab("invite")} style={{ color: "#50a878", cursor: "pointer", textDecoration: "underline" }}>Invite tab</span> to send them a link.
+            </div>
+            {msg && <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, color: msg.type === "error" ? "#e07050" : "#50d898", marginBottom: 14 }}>{msg.text}</div>}
+            <div style={S.label}>YOUR PARTNERS</div>
+            {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading...</div> :
+              friends.length === 0 ? <div style={{ color: "#806040", fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13 }}>No riding partners added yet</div> :
+                friends.map(f => (
+                  <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid rgba(160,80,20,0.2)" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: "'Lora', serif", fontSize: 14, color: "#f5e8cc" }}>{f.friend_name}</div>
+                      <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040" }}>{f.friend_email}</div>
+                    </div>
+                    <button onClick={() => removeFriend(f.id)} style={{ background: "rgba(80,20,10,0.7)", border: "1px solid #7a2010", color: "#e06040", padding: "5px 10px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>Remove</button>
+                  </div>
+                ))
+            }
+          </>
+        )}
+
+        {tab === "invite" && (
+          <>
+            <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 14, color: "#c0d8b0", lineHeight: 1.6, marginBottom: 20 }}>
+              Send this link to anyone you want to ride with. When they open it, they'll see your invitation and can sign in with their Google account to get started.
+            </div>
+            <div style={S.label}>YOUR INVITE LINK</div>
+            <div style={{ background: "rgba(20,50,35,0.7)", border: "1px solid #2a6848", borderRadius: 10, padding: "12px 14px", marginBottom: 14, wordBreak: "break-all", fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#40c878", lineHeight: 1.6 }}>
+              {inviteUrl}
+            </div>
+            <button onClick={copyInvite}
+              style={{ ...S.btnPrimary, width: "100%", textAlign: "center", background: inviteCopied ? "#1a5838" : "#3a7858", transition: "background 0.2s", marginBottom: 16 }}>
+              {inviteCopied ? "✓ Copied to clipboard!" : "Copy Invite Link"}
+            </button>
+            <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", lineHeight: 1.5 }}>
+              Once they've signed in, come back to the <span onClick={() => setTab("connect")} style={{ color: "#50a878", cursor: "pointer", textDecoration: "underline" }}>Connect tab</span> and add them by their email address.
+            </div>
+          </>
+        )}
+
         <button onClick={onClose} style={{ ...S.btnGhost, width: "100%", marginTop: 20, textAlign: "center" }}>Done</button>
       </div>
     </div>
@@ -670,6 +728,8 @@ function MainApp({ user }) {
   const [customZones, setCustomZones] = useState([]);
   const [showCustomZoneInput, setShowCustomZoneInput] = useState(false);
   const [customZoneInput, setCustomZoneInput] = useState("");
+  const [packMode, setPackMode] = useState(false);
+  const [checkedItems, setCheckedItems] = useState(new Set());
 
   // Modals
   const [saveOpen, setSaveOpen] = useState(false);
@@ -694,8 +754,8 @@ function MainApp({ user }) {
 
   // Fetch items when currentList changes
   useEffect(() => {
-    if (currentList) fetchItems(currentList.id);
-    else setItems([]);
+    if (currentList) { fetchItems(currentList.id); fetchPackingSession(currentList.id); }
+    else { setItems([]); setCheckedItems(new Set()); }
   }, [currentList]);
 
   async function fetchLists() {
@@ -739,6 +799,53 @@ function MainApp({ user }) {
     setCustomZones(prev => prev.filter(z => z !== zoneName));
     if (form.zone === zoneName) setForm(f => ({ ...f, zone: STORAGE_ZONES[0] }));
     if (filterZone === zoneName) setFilterZone("All");
+  }
+
+  async function fetchPackingSession(listId) {
+    const { data } = await supabase
+      .from("packing_sessions")
+      .select("checked_item_ids")
+      .eq("user_id", user.id)
+      .eq("list_id", listId)
+      .single();
+    if (data?.checked_item_ids) {
+      setCheckedItems(new Set(data.checked_item_ids));
+    } else {
+      setCheckedItems(new Set());
+    }
+  }
+
+  async function savePackingSession(newChecked) {
+    if (!currentList) return;
+    await supabase.from("packing_sessions").upsert({
+      user_id: user.id,
+      list_id: currentList.id,
+      checked_item_ids: [...newChecked],
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  function togglePackItem(itemId) {
+    setCheckedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      savePackingSession(next);
+      return next;
+    });
+  }
+
+  async function resetPackingSession() {
+    setCheckedItems(new Set());
+    if (currentList) {
+      await supabase.from("packing_sessions").upsert({
+        user_id: user.id,
+        list_id: currentList.id,
+        checked_item_ids: [],
+        updated_at: new Date().toISOString(),
+      });
+    }
+    notify("Packing list reset ✓");
   }
 
   async function saveList() {
@@ -943,7 +1050,10 @@ function MainApp({ user }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               {/* User avatar */}
               {user.user_metadata?.avatar_url && <img src={user.user_metadata.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(220,150,60,0.4)" }} />}
-              <button onClick={() => setFriendsOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>👥 Friends</button>
+              <button onClick={() => setFriendsOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>👥 Partners</button>
+              {currentList && items.length > 0 && (
+                <button onClick={() => setPackMode(true)} style={{ background: "rgba(60,40,100,0.6)", border: "1px solid rgba(150,100,220,0.4)", color: "#c0a0f0", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>🎒 Pack Mode</button>
+              )}
               <button onClick={() => setShareOpen(true)} style={{ background: "rgba(30,80,55,0.8)", border: "1px solid #2a9068", color: "#60d898", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>🔗 Share Kit</button>
               <button onClick={() => setLoadOpen(true)} style={S.btnSecondary}>Load</button>
               <button onClick={() => { setNewListName(currentList?.name || ""); setSaveOpen(true); }} style={S.btnPrimary}>Save List</button>
@@ -955,6 +1065,93 @@ function MainApp({ user }) {
         </div>
 
         <div style={{ maxWidth: 920, margin: "0 auto", padding: "22px 18px 60px" }}>
+
+          {/* ── Pack Mode ── */}
+          {packMode && (() => {
+            const packGroups = allZones.map(zone => ({
+              zone,
+              items: items.filter(i => i.zone === zone),
+            })).filter(g => g.items.length > 0);
+            const total = items.length;
+            const checked = items.filter(i => checkedItems.has(i.id)).length;
+            const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+            return (
+              <div>
+                {/* Pack mode header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+                  <div>
+                    <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 700, color: "#c0a0f0" }}>🎒 Pack Mode</div>
+                    <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", marginTop: 3, letterSpacing: "0.5px" }}>
+                      {currentList?.name} · {checked} of {total} items packed
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={resetPackingSession} style={{ background: "rgba(80,20,10,0.6)", border: "1px solid rgba(200,80,40,0.4)", color: "#e08060", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>Reset</button>
+                    <button onClick={() => setPackMode(false)} style={S.btnPrimary}>← Back to Kit</button>
+                  </div>
+                </div>
+
+                {/* Overall progress bar */}
+                <div style={{ background: "rgba(255,238,200,0.1)", borderRadius: 16, padding: "16px 20px", marginBottom: 20, border: "1px solid rgba(240,195,100,0.2)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#50a878", letterSpacing: "2px" }}>OVERALL PROGRESS</span>
+                    <span style={{ fontFamily: "'Lora', serif", fontSize: 18, fontWeight: 700, color: pct === 100 ? "#50d898" : "#f0a030" }}>{pct}%</span>
+                  </div>
+                  <div style={{ background: "rgba(80,50,20,0.5)", borderRadius: 20, height: 10, overflow: "hidden" }}>
+                    <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "linear-gradient(90deg, #2a9868, #50d898)" : "linear-gradient(90deg, #c07820, #f0a030)", borderRadius: 20, transition: "width 0.4s ease" }} />
+                  </div>
+                  {pct === 100 && (
+                    <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 14, color: "#50d898", marginTop: 10, textAlign: "center" }}>
+                      ✓ All packed — time to ride! 🚲
+                    </div>
+                  )}
+                </div>
+
+                {/* Bags */}
+                {packGroups.map(({ zone, items: zoneItems }) => {
+                  const col = getZoneColor(zone);
+                  const zoneChecked = zoneItems.filter(i => checkedItems.has(i.id)).length;
+                  const zoneDone = zoneChecked === zoneItems.length;
+                  return (
+                    <div key={zone} style={{ marginBottom: 14 }}>
+                      <div style={{ background: zoneDone ? "rgba(30,80,50,0.9)" : col.bg, borderRadius: "14px 14px 0 0", padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "background 0.3s" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 9, height: 9, borderRadius: "50%", background: zoneDone ? "#50d898" : col.dot }} />
+                          <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 13, fontWeight: 600, color: zoneDone ? "#50d898" : col.text }}>{zone}</span>
+                        </div>
+                        <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: zoneDone ? "#50d898" : col.text, opacity: 0.8 }}>
+                          {zoneDone ? "✓ Done" : `${zoneChecked}/${zoneItems.length}`}
+                        </span>
+                      </div>
+                      <div style={{ background: "rgba(20,12,4,0.75)", borderRadius: "0 0 14px 14px", border: `1px solid ${col.bg}`, borderTop: "none", overflow: "hidden" }}>
+                        {zoneItems.map((item, idx) => {
+                          const isChecked = checkedItems.has(item.id);
+                          return (
+                            <div key={item.id} onClick={() => togglePackItem(item.id)}
+                              style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderBottom: idx < zoneItems.length - 1 ? "1px solid rgba(160,80,20,0.12)" : "none", cursor: "pointer", background: isChecked ? "rgba(30,70,45,0.5)" : "transparent", transition: "background 0.2s" }}>
+                              <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isChecked ? "#3aaa78" : "rgba(200,150,60,0.4)"}`, background: isChecked ? "#3aaa78" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                                {isChecked && <span style={{ color: "#fff", fontSize: 13, lineHeight: 1 }}>✓</span>}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <span style={{ fontFamily: "'Lora', serif", fontSize: 14, color: isChecked ? "#60a878" : "#f5e8cc", textDecoration: isChecked ? "line-through" : "none", transition: "all 0.2s" }}>{item.name}</span>
+                                {item.notes ? <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", marginTop: 2, fontStyle: "italic" }}>{item.notes}</div> : null}
+                              </div>
+                              <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, color: isChecked ? "#3aaa78" : col.text, opacity: isChecked ? 0.6 : 1 }}>
+                                <WeightDisplay oz={toOz(item.lbs, item.oz)} />
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Main kit content — hidden in pack mode ── */}
+          {!packMode && <>
 
           {/* Shared item inbox */}
           <SharedItemsInbox user={user} lists={lists} onAccepted={() => currentList && fetchItems(currentList.id)} />
@@ -1175,6 +1372,7 @@ function MainApp({ user }) {
               </div>
             </div>
           )}
+          </> /* end !packMode */}
         </div>
       </div>
 
