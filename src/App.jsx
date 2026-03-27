@@ -1372,7 +1372,7 @@ function MainApp({ user }) {
               </div>
             </div>
           )}
-          </> /* end !packMode */}
+          </> }
         </div>
       </div>
 
