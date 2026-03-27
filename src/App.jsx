@@ -55,16 +55,16 @@ const S = {
     overflow: "hidden",
   },
   card: {
-    background: "rgba(80,50,20,0.55)",
-    backdropFilter: "blur(10px)",
+    background: "rgba(245,225,190,0.12)",
+    backdropFilter: "blur(12px)",
     borderRadius: 16,
-    border: "1px solid rgba(220,150,60,0.25)",
-    boxShadow: "0 4px 24px rgba(0,0,0,0.2)",
+    border: "1px solid rgba(240,190,100,0.22)",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.15)",
   },
   input: {
-    background: "rgba(100,60,20,0.5)",
-    border: "1px solid rgba(220,150,60,0.35)",
-    color: "#f5e8cc",
+    background: "rgba(255,240,210,0.15)",
+    border: "1px solid rgba(220,170,80,0.35)",
+    color: "#f8efd8",
     padding: "10px 14px",
     borderRadius: 10,
     fontSize: 14,
@@ -72,9 +72,9 @@ const S = {
     width: "100%",
   },
   select: {
-    background: "rgba(100,60,20,0.5)",
-    border: "1px solid rgba(220,150,60,0.35)",
-    color: "#f5e8cc",
+    background: "rgba(255,240,210,0.15)",
+    border: "1px solid rgba(220,170,80,0.35)",
+    color: "#f8efd8",
     padding: "10px 14px",
     borderRadius: 10,
     fontSize: 13,
@@ -129,14 +129,14 @@ const S = {
     zIndex: 200,
   },
   modalBox: {
-    background: "#3a2008",
+    background: "rgba(60,35,12,0.97)",
     borderRadius: 22,
     padding: 32,
     width: 420,
     maxHeight: "80vh",
     overflow: "auto",
     boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-    border: "1px solid rgba(220,150,60,0.3)",
+    border: "1px solid rgba(220,170,80,0.3)",
   },
   modalTitle: {
     fontFamily: "'Lora', serif",
@@ -667,6 +667,9 @@ function MainApp({ user }) {
   const [toast, setToast] = useState(null);
   const [sharedKit, setSharedKit] = useState(null);
   const [weightLoading, setWeightLoading] = useState(false);
+  const [customZones, setCustomZones] = useState([]);
+  const [showCustomZoneInput, setShowCustomZoneInput] = useState(false);
+  const [customZoneInput, setCustomZoneInput] = useState("");
 
   // Modals
   const [saveOpen, setSaveOpen] = useState(false);
@@ -687,7 +690,7 @@ function MainApp({ user }) {
   }, []);
 
   // Fetch lists on mount
-  useEffect(() => { fetchLists(); }, []);
+  useEffect(() => { fetchLists(); fetchCustomZones(); }, []);
 
   // Fetch items when currentList changes
   useEffect(() => {
@@ -703,6 +706,36 @@ function MainApp({ user }) {
   async function fetchItems(listId) {
     const { data } = await supabase.from("items").select("*").eq("list_id", listId).order("created_at", { ascending: true });
     setItems(data || []);
+  }
+
+  async function fetchCustomZones() {
+    const { data } = await supabase.from("custom_zones").select("*").eq("user_id", user.id).order("created_at", { ascending: true });
+    setCustomZones((data || []).map(r => r.zone_name));
+  }
+
+  async function addCustomZone() {
+    const name = customZoneInput.trim();
+    if (!name) return;
+    const allZones = [...STORAGE_ZONES, ...customZones];
+    if (allZones.map(z => z.toLowerCase()).includes(name.toLowerCase())) {
+      notify("That bag already exists");
+      return;
+    }
+    const { error } = await supabase.from("custom_zones").insert({ user_id: user.id, zone_name: name });
+    if (!error) {
+      setCustomZones(prev => [...prev, name]);
+      setForm(f => ({ ...f, zone: name }));
+      setShowCustomZoneInput(false);
+      setCustomZoneInput("");
+      notify(`"${name}" added as a bag ✓`);
+    }
+  }
+
+  async function removeCustomZone(zoneName) {
+    await supabase.from("custom_zones").delete().eq("user_id", user.id).eq("zone_name", zoneName);
+    setCustomZones(prev => prev.filter(z => z !== zoneName));
+    if (form.zone === zoneName) setForm(f => ({ ...f, zone: STORAGE_ZONES[0] }));
+    if (filterZone === zoneName) setFilterZone("All");
   }
 
   async function saveList() {
@@ -748,27 +781,44 @@ function MainApp({ user }) {
 
   async function handleSubmit() {
     if (!form.name.trim()) return;
+    const formSnapshot = { ...form }; // capture before any async state changes
     if (!currentList) {
-      // Auto-create a list if none selected
-      const { data: newList } = await supabase.from("lists").insert({ user_id: user.id, name: "My Kit" }).select().single();
-      if (newList) {
+      const { data: newList, error } = await supabase
+        .from("lists")
+        .insert({ user_id: user.id, name: "My Kit" })
+        .select()
+        .single();
+      if (newList && !error) {
         await fetchLists();
         setCurrentList(newList);
-        await addItemToList(newList.id);
+        await addItemToList(newList.id, formSnapshot);
       }
     } else {
-      await addItemToList(currentList.id);
+      await addItemToList(currentList.id, formSnapshot);
     }
     setForm(emptyForm);
     setEditId(null);
   }
 
-  async function addItemToList(listId) {
-    const itemData = { list_id: listId, user_id: user.id, name: form.name, lbs: parseFloat(form.lbs) || 0, oz: parseFloat(form.oz) || 0, category: form.category, zone: form.zone, essential: form.essential, notes: form.notes };
+  async function addItemToList(listId, formData) {
+    const data = formData || form;
+    const itemData = {
+      list_id: listId,
+      user_id: user.id,
+      name: data.name,
+      lbs: parseFloat(data.lbs) || 0,
+      oz: parseFloat(data.oz) || 0,
+      category: data.category,
+      zone: data.zone,
+      essential: data.essential,
+      notes: data.notes || "",
+    };
     if (editId) {
-      await supabase.from("items").update(itemData).eq("id", editId);
+      const { error } = await supabase.from("items").update(itemData).eq("id", editId);
+      if (error) { notify("Error updating item"); return; }
     } else {
-      await supabase.from("items").insert(itemData);
+      const { error } = await supabase.from("items").insert(itemData);
+      if (error) { notify("Error adding item"); return; }
     }
     await fetchItems(listId);
   }
@@ -813,6 +863,10 @@ function MainApp({ user }) {
     notify(`"${suggestion.name}" loaded into form — add weight and hit Add Item`);
   }
 
+  const allZones = [...STORAGE_ZONES, ...customZones];
+
+  const getZoneColor = (zone) => STORAGE_COLORS[zone] || { bg: "#4a4030", text: "#e8d898", dot: "#b09050" };
+
   const totalOz = items.reduce((s, i) => s + toOz(i.lbs, i.oz), 0);
   const essentialOz = items.filter(i => i.essential).reduce((s, i) => s + toOz(i.lbs, i.oz), 0);
 
@@ -823,7 +877,7 @@ function MainApp({ user }) {
     return true;
   });
 
-  const groupedByZone = STORAGE_ZONES.map(zone => ({
+  const groupedByZone = allZones.map(zone => ({
     zone,
     items: filtered.filter(i => i.zone === zone),
     totalOz: filtered.filter(i => i.zone === zone).reduce((s, i) => s + toOz(i.lbs, i.oz), 0),
@@ -840,7 +894,8 @@ function MainApp({ user }) {
         ::-webkit-scrollbar-track { background: #2a1808; }
         ::-webkit-scrollbar-thumb { background: #5a8040; border-radius: 10px; }
         input, select, button, textarea { font-family: 'Josefin Sans', sans-serif; }
-        input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(80,180,100,0.35); }
+        input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(200,160,60,0.4); border-color: rgba(220,170,80,0.6) !important; }
+        input::placeholder, textarea::placeholder { color: rgba(240,210,150,0.45); }
         .item-row { transition: background 0.12s ease; }
         .item-row:hover { background: rgba(80,50,20,0.5) !important; }
         .action-btn { opacity: 0; transition: opacity 0.15s; }
@@ -905,12 +960,12 @@ function MainApp({ user }) {
           {/* Summary cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10, marginBottom: 20 }} className="fade-up">
             {[
-              { label: "TOTAL WEIGHT", val: <WeightDisplay oz={totalOz} />, color: "#f0a030" },
-              { label: "ESSENTIAL WT.", val: <WeightDisplay oz={essentialOz} />, color: "#40c880" },
-              { label: "TOTAL ITEMS", val: items.length, color: "#f08030" },
-              { label: "BAGS IN USE", val: new Set(items.map(i => i.zone)).size, color: "#50b888" },
+              { label: "TOTAL WEIGHT", val: <WeightDisplay oz={totalOz} />, color: "#f5b040" },
+              { label: "ESSENTIAL WT.", val: <WeightDisplay oz={essentialOz} />, color: "#50d890" },
+              { label: "TOTAL ITEMS", val: items.length, color: "#f09040" },
+              { label: "BAGS IN USE", val: new Set(items.map(i => i.zone)).size, color: "#60c898" },
             ].map(({ label, val, color }) => (
-              <div key={label} style={{ ...S.card, padding: "14px 16px" }}>
+              <div key={label} style={{ background: "rgba(255,235,190,0.1)", backdropFilter: "blur(12px)", borderRadius: 16, padding: "14px 16px", border: "1px solid rgba(240,190,100,0.2)", boxShadow: "0 2px 12px rgba(0,0,0,0.15)" }}>
                 <div style={S.label}>{label}</div>
                 <div style={{ fontFamily: "'Lora', serif", fontSize: 20, fontWeight: 600, color }}>{val}</div>
               </div>
@@ -918,7 +973,7 @@ function MainApp({ user }) {
           </div>
 
           {/* Add/Edit form */}
-          <div style={{ ...S.card, padding: "20px", marginBottom: 20 }} className="fade-up">
+          <div style={{ background: "rgba(255,238,200,0.13)", backdropFilter: "blur(16px)", borderRadius: 20, padding: "20px", marginBottom: 20, border: "1px solid rgba(240,195,100,0.28)", boxShadow: "0 4px 28px rgba(0,0,0,0.18)" }} className="fade-up">
             <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#50a878", letterSpacing: "2.5px", marginBottom: 14 }}>
               {editId ? "✏️  EDITING ITEM" : "＋  ADD GEAR ITEM"}
             </div>
@@ -932,9 +987,54 @@ function MainApp({ user }) {
                   {weightLoading ? "⏳" : "⚖️"}
                 </button>
               </div>
-              <select value={form.zone} onChange={e => setForm(f => ({ ...f, zone: e.target.value }))} style={S.select}>
-                {STORAGE_ZONES.map(z => <option key={z}>{z}</option>)}
-              </select>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <select
+                  value={showCustomZoneInput ? "__custom__" : form.zone}
+                  onChange={e => {
+                    if (e.target.value === "__custom__") {
+                      setShowCustomZoneInput(true);
+                      setCustomZoneInput("");
+                    } else {
+                      setShowCustomZoneInput(false);
+                      setForm(f => ({ ...f, zone: e.target.value }));
+                    }
+                  }}
+                  style={S.select}>
+                  <optgroup label="Standard Bags">
+                    {STORAGE_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+                  </optgroup>
+                  {customZones.length > 0 && (
+                    <optgroup label="Your Custom Bags">
+                      {customZones.map(z => <option key={z} value={z}>{z}</option>)}
+                    </optgroup>
+                  )}
+                  <option value="__custom__">＋ Add custom bag...</option>
+                </select>
+                {showCustomZoneInput && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      value={customZoneInput}
+                      onChange={e => setCustomZoneInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") addCustomZone(); if (e.key === "Escape") { setShowCustomZoneInput(false); setCustomZoneInput(""); } }}
+                      placeholder="e.g. Stem Bag, Hip Pack..."
+                      autoFocus
+                      style={{ ...S.input, flex: 1 }}
+                    />
+                    <button onClick={addCustomZone} style={{ ...S.btnPrimary, padding: "10px 14px", flexShrink: 0 }}>Add</button>
+                    <button onClick={() => { setShowCustomZoneInput(false); setCustomZoneInput(""); }} style={{ ...S.btnGhost, padding: "10px 12px", flexShrink: 0 }}>✕</button>
+                  </div>
+                )}
+                {customZones.length > 0 && !showCustomZoneInput && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {customZones.map(z => (
+                      <span key={z} style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#c09050", background: "rgba(80,45,15,0.5)", border: "1px solid rgba(160,90,20,0.3)", padding: "2px 8px", borderRadius: 10, display: "flex", alignItems: "center", gap: 4 }}>
+                        {z}
+                        <button onClick={() => removeCustomZone(z)} style={{ background: "none", border: "none", color: "#e06040", cursor: "pointer", fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={S.select}>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
@@ -972,12 +1072,12 @@ function MainApp({ user }) {
               </button>
             ))}
             <div style={{ width: 1, height: 16, background: "rgba(160,90,20,0.4)", margin: "0 4px" }} />
-            {["All", ...STORAGE_ZONES].map(z => {
+            {["All", ...STORAGE_ZONES, ...customZones].map(z => {
               const col = STORAGE_COLORS[z];
               const active = filterZone === z;
               return (
                 <button key={z} className="pill-btn" onClick={() => setFilterZone(z)}
-                  style={{ background: active ? (col?.bg || "rgba(80,45,15,0.6)") : "rgba(80,45,15,0.6)", color: active ? (col?.text || "#f5e8cc") : "#c09050", border: `1px solid ${active ? (col?.dot || "#a06020") : "rgba(160,90,20,0.4)"}` }}>
+                  style={{ background: active ? (col?.bg || "rgba(80,55,20,0.8)") : "rgba(80,45,15,0.6)", color: active ? (col?.text || "#f5e8cc") : "#c09050", border: `1px solid ${active ? (col?.dot || "#c08030") : "rgba(160,90,20,0.4)"}` }}>
                   {z === "All" ? "All Bags" : z}
                 </button>
               );
@@ -994,7 +1094,7 @@ function MainApp({ user }) {
           ) : groupedByZone.length === 0 ? (
             <div style={{ textAlign: "center", padding: "40px 0", fontFamily: "'Lora', serif", fontStyle: "italic", color: "#806040" }}>No items match filters</div>
           ) : groupedByZone.map(({ zone, items: zoneItems, totalOz: zoneOz }, gi) => {
-            const col = STORAGE_COLORS[zone];
+            const col = getZoneColor(zone);
             const collapsed = collapsedZones[zone];
             return (
               <div key={zone} className="fade-up" style={{ marginBottom: 12, animationDelay: `${gi * 0.04}s` }}>
@@ -1043,13 +1143,13 @@ function MainApp({ user }) {
 
           {/* Bag breakdown */}
           {items.length > 0 && (
-            <div style={{ ...S.card, padding: "18px 20px", marginTop: 20 }}>
+            <div style={{ background: "rgba(255,238,200,0.1)", backdropFilter: "blur(12px)", borderRadius: 16, border: "1px solid rgba(240,190,100,0.2)", padding: "18px 20px", marginTop: 20 }}>
               <div style={S.label}>BAG WEIGHT BREAKDOWN</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {STORAGE_ZONES.map(zone => {
+                {allZones.map(zone => {
                   const zOz = items.filter(i => i.zone === zone).reduce((s, i) => s + toOz(i.lbs, i.oz), 0);
                   if (!zOz) return null;
-                  const col = STORAGE_COLORS[zone];
+                  const col = getZoneColor(zone);
                   const pct = totalOz > 0 ? Math.round((zOz / totalOz) * 100) : 0;
                   return (
                     <div key={zone} style={{ background: col.bg, borderRadius: 10, padding: "10px 14px", minWidth: 100 }}>
