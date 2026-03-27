@@ -712,6 +712,91 @@ export default function App() {
   return <MainApp user={session.user} />;
 }
 
+// ── Pack Mode View ────────────────────────────────────────────────────────────
+function PackModeView({ items, allZones, checkedItems, currentList, getZoneColor, onToggle, onReset, onExit }) {
+  const packGroups = allZones.map(zone => ({
+    zone,
+    items: items.filter(i => i.zone === zone),
+  })).filter(g => g.items.length > 0);
+  const total = items.length;
+  const checked = items.filter(i => checkedItems.has(i.id)).length;
+  const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 700, color: "#c0a0f0" }}>🎒 Pack Mode</div>
+          <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", marginTop: 3, letterSpacing: "0.5px" }}>
+            {currentList?.name} · {checked} of {total} items packed
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onReset} style={{ background: "rgba(80,20,10,0.6)", border: "1px solid rgba(200,80,40,0.4)", color: "#e08060", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>Reset</button>
+          <button onClick={onExit} style={{ background: "#3a7858", border: "none", color: "#b0f0d0", padding: "10px 22px", borderRadius: 20, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "'Josefin Sans', sans-serif" }}>← Back to Kit</button>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ background: "rgba(255,238,200,0.1)", borderRadius: 16, padding: "16px 20px", marginBottom: 20, border: "1px solid rgba(240,195,100,0.2)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#50a878", letterSpacing: "2px" }}>OVERALL PROGRESS</span>
+          <span style={{ fontFamily: "'Lora', serif", fontSize: 18, fontWeight: 700, color: pct === 100 ? "#50d898" : "#f0a030" }}>{pct}%</span>
+        </div>
+        <div style={{ background: "rgba(80,50,20,0.5)", borderRadius: 20, height: 10, overflow: "hidden" }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "linear-gradient(90deg, #2a9868, #50d898)" : "linear-gradient(90deg, #c07820, #f0a030)", borderRadius: 20, transition: "width 0.4s ease" }} />
+        </div>
+        {pct === 100 && (
+          <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 14, color: "#50d898", marginTop: 10, textAlign: "center" }}>
+            ✓ All packed — time to ride! 🚲
+          </div>
+        )}
+      </div>
+
+      {/* Bags */}
+      {packGroups.map(({ zone, items: zoneItems }) => {
+        const col = getZoneColor(zone);
+        const zoneChecked = zoneItems.filter(i => checkedItems.has(i.id)).length;
+        const zoneDone = zoneChecked === zoneItems.length;
+        return (
+          <div key={zone} style={{ marginBottom: 14 }}>
+            <div style={{ background: zoneDone ? "rgba(30,80,50,0.9)" : col.bg, borderRadius: "14px 14px 0 0", padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "background 0.3s" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 9, height: 9, borderRadius: "50%", background: zoneDone ? "#50d898" : col.dot }} />
+                <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 13, fontWeight: 600, color: zoneDone ? "#50d898" : col.text }}>{zone}</span>
+              </div>
+              <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: zoneDone ? "#50d898" : col.text, opacity: 0.8 }}>
+                {zoneDone ? "✓ Done" : `${zoneChecked}/${zoneItems.length}`}
+              </span>
+            </div>
+            <div style={{ background: "rgba(20,12,4,0.75)", borderRadius: "0 0 14px 14px", border: `1px solid ${col.bg}`, borderTop: "none", overflow: "hidden" }}>
+              {zoneItems.map((item, idx) => {
+                const isChecked = checkedItems.has(item.id);
+                return (
+                  <div key={item.id} onClick={() => onToggle(item.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderBottom: idx < zoneItems.length - 1 ? "1px solid rgba(160,80,20,0.12)" : "none", cursor: "pointer", background: isChecked ? "rgba(30,70,45,0.5)" : "transparent", transition: "background 0.2s" }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isChecked ? "#3aaa78" : "rgba(200,150,60,0.4)"}`, background: isChecked ? "#3aaa78" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                      {isChecked && <span style={{ color: "#fff", fontSize: 13, lineHeight: 1 }}>✓</span>}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontFamily: "'Lora', serif", fontSize: 14, color: isChecked ? "#60a878" : "#f5e8cc", textDecoration: isChecked ? "line-through" : "none", transition: "all 0.2s" }}>{item.name}</span>
+                      {item.notes ? <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", marginTop: 2, fontStyle: "italic" }}>{item.notes}</div> : null}
+                    </div>
+                    <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, color: isChecked ? "#3aaa78" : col.text, opacity: isChecked ? 0.6 : 1 }}>
+                      <WeightDisplay oz={toOz(item.lbs, item.oz)} />
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main App (authenticated) ──────────────────────────────────────────────────
 function MainApp({ user }) {
   const [lists, setLists] = useState([]);
@@ -1067,87 +1152,17 @@ function MainApp({ user }) {
         <div style={{ maxWidth: 920, margin: "0 auto", padding: "22px 18px 60px" }}>
 
           {/* ── Pack Mode ── */}
-          {packMode && (() => {
-            const packGroups = allZones.map(zone => ({
-              zone,
-              items: items.filter(i => i.zone === zone),
-            })).filter(g => g.items.length > 0);
-            const total = items.length;
-            const checked = items.filter(i => checkedItems.has(i.id)).length;
-            const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
-            return (
-              <div>
-                {/* Pack mode header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
-                  <div>
-                    <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 700, color: "#c0a0f0" }}>🎒 Pack Mode</div>
-                    <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", marginTop: 3, letterSpacing: "0.5px" }}>
-                      {currentList?.name} · {checked} of {total} items packed
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={resetPackingSession} style={{ background: "rgba(80,20,10,0.6)", border: "1px solid rgba(200,80,40,0.4)", color: "#e08060", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>Reset</button>
-                    <button onClick={() => setPackMode(false)} style={S.btnPrimary}>← Back to Kit</button>
-                  </div>
-                </div>
-
-                {/* Overall progress bar */}
-                <div style={{ background: "rgba(255,238,200,0.1)", borderRadius: 16, padding: "16px 20px", marginBottom: 20, border: "1px solid rgba(240,195,100,0.2)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#50a878", letterSpacing: "2px" }}>OVERALL PROGRESS</span>
-                    <span style={{ fontFamily: "'Lora', serif", fontSize: 18, fontWeight: 700, color: pct === 100 ? "#50d898" : "#f0a030" }}>{pct}%</span>
-                  </div>
-                  <div style={{ background: "rgba(80,50,20,0.5)", borderRadius: 20, height: 10, overflow: "hidden" }}>
-                    <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "linear-gradient(90deg, #2a9868, #50d898)" : "linear-gradient(90deg, #c07820, #f0a030)", borderRadius: 20, transition: "width 0.4s ease" }} />
-                  </div>
-                  {pct === 100 && (
-                    <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 14, color: "#50d898", marginTop: 10, textAlign: "center" }}>
-                      ✓ All packed — time to ride! 🚲
-                    </div>
-                  )}
-                </div>
-
-                {/* Bags */}
-                {packGroups.map(({ zone, items: zoneItems }) => {
-                  const col = getZoneColor(zone);
-                  const zoneChecked = zoneItems.filter(i => checkedItems.has(i.id)).length;
-                  const zoneDone = zoneChecked === zoneItems.length;
-                  return (
-                    <div key={zone} style={{ marginBottom: 14 }}>
-                      <div style={{ background: zoneDone ? "rgba(30,80,50,0.9)" : col.bg, borderRadius: "14px 14px 0 0", padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "background 0.3s" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 9, height: 9, borderRadius: "50%", background: zoneDone ? "#50d898" : col.dot }} />
-                          <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 13, fontWeight: 600, color: zoneDone ? "#50d898" : col.text }}>{zone}</span>
-                        </div>
-                        <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: zoneDone ? "#50d898" : col.text, opacity: 0.8 }}>
-                          {zoneDone ? "✓ Done" : `${zoneChecked}/${zoneItems.length}`}
-                        </span>
-                      </div>
-                      <div style={{ background: "rgba(20,12,4,0.75)", borderRadius: "0 0 14px 14px", border: `1px solid ${col.bg}`, borderTop: "none", overflow: "hidden" }}>
-                        {zoneItems.map((item, idx) => {
-                          const isChecked = checkedItems.has(item.id);
-                          return (
-                            <div key={item.id} onClick={() => togglePackItem(item.id)}
-                              style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderBottom: idx < zoneItems.length - 1 ? "1px solid rgba(160,80,20,0.12)" : "none", cursor: "pointer", background: isChecked ? "rgba(30,70,45,0.5)" : "transparent", transition: "background 0.2s" }}>
-                              <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isChecked ? "#3aaa78" : "rgba(200,150,60,0.4)"}`, background: isChecked ? "#3aaa78" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
-                                {isChecked && <span style={{ color: "#fff", fontSize: 13, lineHeight: 1 }}>✓</span>}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <span style={{ fontFamily: "'Lora', serif", fontSize: 14, color: isChecked ? "#60a878" : "#f5e8cc", textDecoration: isChecked ? "line-through" : "none", transition: "all 0.2s" }}>{item.name}</span>
-                                {item.notes ? <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", marginTop: 2, fontStyle: "italic" }}>{item.notes}</div> : null}
-                              </div>
-                              <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, color: isChecked ? "#3aaa78" : col.text, opacity: isChecked ? 0.6 : 1 }}>
-                                <WeightDisplay oz={toOz(item.lbs, item.oz)} />
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+          {packMode && (
+            <PackModeView
+              items={items}
+              allZones={allZones}
+              checkedItems={checkedItems}
+              currentList={currentList}
+              getZoneColor={getZoneColor}
+              onToggle={togglePackItem}
+              onReset={resetPackingSession}
+              onExit={() => setPackMode(false)}
+            />
           )}
 
           {/* ── Main kit content — hidden in pack mode ── */}
