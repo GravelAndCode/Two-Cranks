@@ -713,7 +713,7 @@ export default function App() {
 }
 
 // ── Pack Mode View ────────────────────────────────────────────────────────────
-function PackModeView({ items, allZones, checkedItems, currentList, getZoneColor, onToggle, onReset, onExit }) {
+function PackModeView({ items, allZones, checkedItems, currentList, getZoneColor, onToggle, onRequestReset, onExit }) {
   const packGroups = allZones.map(zone => ({
     zone,
     items: items.filter(i => i.zone === zone),
