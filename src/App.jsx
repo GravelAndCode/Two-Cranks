@@ -721,6 +721,8 @@ function MasterListModal({ user, currentItems, onAddToKit, onClose }) {
   const [addForm, setAddForm] = useState(null); // null = hidden, {} = open
   const [form, setForm] = useState({ name: "", lbs: "", oz: "", category: CATEGORIES[0], zone: STORAGE_ZONES[0], essential: true, notes: "" });
   const [confirmDeleteMaster, setConfirmDeleteMaster] = useState(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillDone, setBackfillDone] = useState(false);
 
   useEffect(() => { fetchMaster(); }, []);
 
@@ -729,6 +731,32 @@ function MasterListModal({ user, currentItems, onAddToKit, onClose }) {
     const { data } = await supabase.from("master_items").select("*").eq("user_id", user.id).order("name", { ascending: true });
     setMasterItems(data || []);
     setLoading(false);
+  }
+
+  async function backfillFromKits() {
+    setBackfilling(true);
+    // Fetch all items across all user's lists
+    const { data: allItems } = await supabase
+      .from("items")
+      .select("name, lbs, oz, category, zone, essential, notes")
+      .eq("user_id", user.id);
+    if (allItems && allItems.length > 0) {
+      // Dedupe by name, keeping first occurrence
+      const seen = new Set();
+      const unique = allItems.filter(i => {
+        const key = i.name.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      await supabase.from("master_items").upsert(
+        unique.map(i => ({ user_id: user.id, name: i.name, lbs: i.lbs || 0, oz: i.oz || 0, category: i.category, zone: i.zone, essential: i.essential, notes: i.notes || "" })),
+        { onConflict: "user_id,name" }
+      );
+    }
+    await fetchMaster();
+    setBackfilling(false);
+    setBackfillDone(true);
   }
 
   async function addToMaster() {
@@ -794,6 +822,26 @@ function MasterListModal({ user, currentItems, onAddToKit, onClose }) {
             {addForm ? "Cancel" : "+ Add Item"}
           </button>
         </div>
+
+        {/* Backfill banner — show until dismissed or done */}
+        {!backfillDone && (
+          <div style={{ background: "rgba(30,60,40,0.6)", border: "1px solid rgba(50,160,100,0.3)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#70c890", lineHeight: 1.5 }}>
+              {masterItems.length === 0
+                ? "Import your existing kit items into the library in one click."
+                : "Add any missing items from your existing kits."}
+            </div>
+            <button onClick={backfillFromKits} disabled={backfilling}
+              style={{ background: "#3a7858", border: "none", color: "#b0f0d0", padding: "7px 14px", borderRadius: 12, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600, flexShrink: 0, opacity: backfilling ? 0.6 : 1 }}>
+              {backfilling ? "Importing..." : "Import from kits"}
+            </button>
+          </div>
+        )}
+        {backfillDone && (
+          <div style={{ background: "rgba(20,50,35,0.5)", border: "1px solid rgba(50,160,100,0.25)", borderRadius: 10, padding: "8px 14px", marginBottom: 12, fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#50a878" }}>
+            ✓ Import complete — all kit items are now in your library
+          </div>
+        )}
 
         {/* Add form */}
         {addForm !== null && (
