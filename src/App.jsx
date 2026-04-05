@@ -712,6 +712,180 @@ export default function App() {
   return <MainApp user={session.user} />;
 }
 
+// ── Master Gear List Modal ────────────────────────────────────────────────────
+function MasterListModal({ user, currentItems, onAddToKit, onClose }) {
+  const [masterItems, setMasterItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("All");
+  const [addForm, setAddForm] = useState(null); // null = hidden, {} = open
+  const [form, setForm] = useState({ name: "", lbs: "", oz: "", category: CATEGORIES[0], zone: STORAGE_ZONES[0], essential: true, notes: "" });
+  const [confirmDeleteMaster, setConfirmDeleteMaster] = useState(null);
+
+  useEffect(() => { fetchMaster(); }, []);
+
+  async function fetchMaster() {
+    setLoading(true);
+    const { data } = await supabase.from("master_items").select("*").eq("user_id", user.id).order("name", { ascending: true });
+    setMasterItems(data || []);
+    setLoading(false);
+  }
+
+  async function addToMaster() {
+    if (!form.name.trim()) return;
+    const { error } = await supabase.from("master_items").upsert({
+      user_id: user.id,
+      name: form.name.trim(),
+      lbs: parseFloat(form.lbs) || 0,
+      oz: parseFloat(form.oz) || 0,
+      category: form.category,
+      zone: form.zone,
+      essential: form.essential,
+      notes: form.notes || "",
+    }, { onConflict: "user_id,name" });
+    if (!error) {
+      setForm({ name: "", lbs: "", oz: "", category: CATEGORIES[0], zone: STORAGE_ZONES[0], essential: true, notes: "" });
+      setAddForm(null);
+      fetchMaster();
+    }
+  }
+
+  async function deleteMasterItem(id) {
+    await supabase.from("master_items").delete().eq("id", id);
+    setMasterItems(prev => prev.filter(i => i.id !== id));
+    setConfirmDeleteMaster(null);
+  }
+
+  const currentItemNames = new Set(currentItems.map(i => i.name.toLowerCase()));
+
+  const filtered = masterItems.filter(i => {
+    if (filterCat !== "All" && i.category !== filterCat) return false;
+    if (search && !i.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const usedCats = ["All", ...new Set(masterItems.map(i => i.category).filter(Boolean))];
+
+  const inputStyle = {
+    background: "rgba(255,240,210,0.12)",
+    border: "1px solid rgba(220,170,80,0.35)",
+    color: "#f8efd8",
+    padding: "8px 12px",
+    borderRadius: 8,
+    fontSize: 13,
+    fontFamily: "'Josefin Sans', sans-serif",
+    width: "100%",
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(30,15,5,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={onClose}>
+      <div style={{ background: "#3a2008", borderRadius: 22, padding: 28, width: 520, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.5)", border: "1px solid rgba(220,170,80,0.25)" }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <div>
+            <div style={{ fontFamily: "'Lora', serif", fontSize: 20, fontWeight: 700, color: "#f0a030" }}>📦 My Gear Library</div>
+            <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#50a878", letterSpacing: "1.5px", marginTop: 3 }}>
+              {masterItems.length} item{masterItems.length !== 1 ? "s" : ""} · auto-saves when you add to any kit
+            </div>
+          </div>
+          <button onClick={() => setAddForm(addForm ? null : {})}
+            style={{ background: addForm ? "rgba(80,20,10,0.6)" : "#3a7858", border: "none", color: addForm ? "#e08060" : "#b0f0d0", padding: "8px 16px", borderRadius: 16, cursor: "pointer", fontSize: 12, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>
+            {addForm ? "Cancel" : "+ Add Item"}
+          </button>
+        </div>
+
+        {/* Add form */}
+        {addForm !== null && (
+          <div style={{ background: "rgba(255,238,200,0.08)", border: "1px solid rgba(240,195,100,0.2)", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <input value={form.name} placeholder="Item name" onChange={e => setForm(f => ({ ...f, name: e.target.value }))} onKeyDown={e => e.key === "Enter" && addToMaster()} style={{ ...inputStyle, gridColumn: "1/-1" }} />
+              <input value={form.lbs} placeholder="lbs" type="number" min="0" onChange={e => setForm(f => ({ ...f, lbs: e.target.value }))} style={inputStyle} />
+              <input value={form.oz} placeholder="oz" type="number" min="0" step="0.1" onChange={e => setForm(f => ({ ...f, oz: e.target.value }))} style={inputStyle} />
+              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ ...inputStyle, fontSize: 12 }}>
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+              <select value={form.zone} onChange={e => setForm(f => ({ ...f, zone: e.target.value }))} style={{ ...inputStyle, fontSize: 12 }}>
+                {STORAGE_ZONES.map(z => <option key={z}>{z}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={addToMaster} style={{ background: "#3a7858", border: "none", color: "#b0f0d0", padding: "8px 20px", borderRadius: 14, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "'Josefin Sans', sans-serif" }}>Save to Library</button>
+            </div>
+          </div>
+        )}
+
+        {/* Search + filter */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search gear..." style={{ ...inputStyle, flex: 1 }} />
+          <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ ...inputStyle, width: "auto", fontSize: 12 }}>
+            {usedCats.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+
+        {/* Items list */}
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "30px 0", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13, color: "#50a878" }}>Loading...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px 0", fontFamily: "'Lora', serif", fontStyle: "italic", color: "#806040", fontSize: 14 }}>
+              {masterItems.length === 0 ? "Your gear library is empty — items auto-save as you build kits" : "No items match your search"}
+            </div>
+          ) : filtered.map(item => {
+            const inKit = currentItemNames.has(item.name.toLowerCase());
+            const itemOz = toOz(item.lbs, item.oz);
+            return (
+              <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 4px", borderBottom: "1px solid rgba(160,80,20,0.15)" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "'Lora', serif", fontSize: 14, color: inKit ? "#60a060" : "#f5e8cc" }}>{item.name}</div>
+                  <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#806040", marginTop: 2 }}>
+                    {item.category} · {item.zone} {itemOz > 0 && <span style={{ color: "#a09060" }}>· <WeightDisplay oz={itemOz} /></span>}
+                  </div>
+                </div>
+                {inKit ? (
+                  <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#50a060", border: "1px solid #2a6030", padding: "3px 10px", borderRadius: 10, flexShrink: 0 }}>In kit ✓</span>
+                ) : (
+                  <button onClick={() => onAddToKit(item)}
+                    style={{ background: "#3a7858", border: "none", color: "#b0f0d0", padding: "5px 12px", borderRadius: 10, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600, flexShrink: 0 }}>
+                    + Add to Kit
+                  </button>
+                )}
+                <button onClick={() => setConfirmDeleteMaster({ id: item.id, name: item.name })}
+                  style={{ background: "transparent", border: "none", color: "#7a4030", cursor: "pointer", fontSize: 13, padding: "4px 6px", flexShrink: 0 }}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Confirm delete within master modal */}
+        {confirmDeleteMaster && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(20,10,4,0.85)", borderRadius: 22, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>🗑️</div>
+              <div style={{ fontFamily: "'Lora', serif", fontSize: 16, fontWeight: 700, color: "#f0a030", marginBottom: 8 }}>Remove from library?</div>
+              <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13, color: "#c0a880", marginBottom: 20, lineHeight: 1.5 }}>
+                "{confirmDeleteMaster.name}" will be removed from your gear library. Items already in kits are not affected.
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                <button onClick={() => deleteMasterItem(confirmDeleteMaster.id)}
+                  style={{ background: "rgba(120,20,10,0.8)", border: "1px solid #8a2010", color: "#f08060", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontSize: 13, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>
+                  Remove
+                </button>
+                <button onClick={() => setConfirmDeleteMaster(null)}
+                  style={{ background: "transparent", border: "1px solid rgba(220,150,60,0.3)", color: "#c09050", padding: "10px 16px", borderRadius: 12, cursor: "pointer", fontSize: 13, fontFamily: "'Josefin Sans', sans-serif" }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button onClick={onClose} style={{ background: "transparent", border: "1px solid rgba(220,150,60,0.25)", color: "#806040", padding: "10px", borderRadius: 12, cursor: "pointer", fontSize: 13, fontFamily: "'Josefin Sans', sans-serif", marginTop: 16, width: "100%", textAlign: "center" }}>Done</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Pack Mode View ────────────────────────────────────────────────────────────
 function PackModeView({ items, allZones, checkedItems, currentList, getZoneColor, onToggle, onRequestReset, onExit }) {
   const packGroups = allZones.map(zone => ({
@@ -825,6 +999,7 @@ function MainApp({ user }) {
   const [aiCheckOpen, setAiCheckOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [shareItemTarget, setShareItemTarget] = useState(null);
+  const [masterListOpen, setMasterListOpen] = useState(false);
 
   const [newListName, setNewListName] = useState("");
 
@@ -1012,10 +1187,26 @@ function MainApp({ user }) {
     };
     if (editId) {
       const { error } = await supabase.from("items").update(itemData).eq("id", editId);
-      if (error) { console.error("Item update error:", error); notify(`Error updating: ${error.message}`); return; }
+      if (error) { notify(`Error updating: ${error.message}`); return; }
+      // Also update in master list if it exists there
+      await supabase.from("master_items").update({
+        lbs: itemData.lbs, oz: itemData.oz, category: itemData.category,
+        zone: itemData.zone, essential: itemData.essential, notes: itemData.notes,
+      }).eq("user_id", user.id).eq("name", data.name);
     } else {
       const { error } = await supabase.from("items").insert(itemData);
-      if (error) { console.error("Item insert error:", error); notify(`Error adding: ${error.message}`); return; }
+      if (error) { notify(`Error adding: ${error.message}`); return; }
+      // Auto-save to master list (upsert so duplicates are ignored)
+      await supabase.from("master_items").upsert({
+        user_id: user.id,
+        name: data.name,
+        lbs: itemData.lbs,
+        oz: itemData.oz,
+        category: data.category,
+        zone: data.zone,
+        essential: data.essential,
+        notes: data.notes || "",
+      }, { onConflict: "user_id,name" });
     }
     await fetchItems(listId);
   }
@@ -1133,6 +1324,7 @@ function MainApp({ user }) {
               {/* User avatar */}
               {user.user_metadata?.avatar_url && <img src={user.user_metadata.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(220,150,60,0.4)" }} />}
               <button onClick={() => setFriendsOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>👥 Friends</button>
+              <button onClick={() => setMasterListOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>📦 My Gear</button>
               {currentList && items.length > 0 && (
                 <button onClick={() => setPackMode(true)} style={{ background: "rgba(80,50,15,0.75)", border: "1px solid rgba(200,140,40,0.5)", color: "#e8b84a", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>🎒 Pack Mode</button>
               )}
@@ -1431,6 +1623,23 @@ function MainApp({ user }) {
       {aiCheckOpen && <AICheckModal items={items} onAddItem={addSuggestedItem} onClose={() => setAiCheckOpen(false)} />}
       {friendsOpen && <FriendsModal user={user} onClose={() => setFriendsOpen(false)} />}
       {shareItemTarget && <ShareItemModal item={shareItemTarget} listName={currentList?.name} user={user} onClose={() => setShareItemTarget(null)} />}
+      {masterListOpen && (
+        <MasterListModal
+          user={user}
+          currentItems={items}
+          onAddToKit={async (masterItem) => {
+            if (!currentList) {
+              notify("Load or save a kit first before adding from your gear library");
+              return;
+            }
+            const already = items.some(i => i.name.toLowerCase() === masterItem.name.toLowerCase());
+            if (already) { notify(`"${masterItem.name}" is already in this kit`); return; }
+            await addItemToList(currentList.id, masterItem);
+            notify(`"${masterItem.name}" added to kit ✓`);
+          }}
+          onClose={() => setMasterListOpen(false)}
+        />
+      )}
 
       {/* Confirm Delete Modal */}
       {confirmDelete && (
