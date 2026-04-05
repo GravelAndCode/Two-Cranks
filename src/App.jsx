@@ -298,11 +298,12 @@ function ShareModal({ items, currentListName, onClose }) {
 }
 
 // ── AI Check Modal ────────────────────────────────────────────────────────────
-function AICheckModal({ items, onAddItem, onClose }) {
+function AICheckModal({ items, onAddItem, onAddToWishlist, onClose }) {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [added, setAdded] = useState(new Set());
+  const [wishlisted, setWishlisted] = useState(new Set());
 
   useEffect(() => {
     async function run() {
@@ -337,9 +338,19 @@ function AICheckModal({ items, onAddItem, onClose }) {
     setAdded(prev => new Set([...prev, suggestion.name]));
   };
 
+  const handleWishlist = (suggestion) => {
+    onAddToWishlist({
+      name: suggestion.name,
+      category: suggestion.category,
+      notes: suggestion.reason,
+      priority: "High",
+    });
+    setWishlisted(prev => new Set([...prev, suggestion.name]));
+  };
+
   return (
     <div style={S.modalOverlay} onClick={onClose}>
-      <div style={{ ...S.modalBox, width: 480 }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...S.modalBox, width: 500 }} onClick={e => e.stopPropagation()}>
         <div style={S.modalTitle}>🔍 Kit Check</div>
         <div style={S.modalSub}>AI analysis of your kit against bikepacking best practices</div>
         {loading && (
@@ -362,16 +373,22 @@ function AICheckModal({ items, onAddItem, onClose }) {
               <>
                 <div style={{ ...S.label, marginBottom: 12 }}>ITEMS YOU MIGHT BE MISSING</div>
                 {result.missing?.map((s, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 0", borderBottom: i < result.missing.length - 1 ? "1px solid rgba(160,80,20,0.2)" : "none" }}>
+                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 0", borderBottom: i < result.missing.length - 1 ? "1px solid rgba(160,80,20,0.2)" : "none" }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: "'Lora', serif", fontSize: 14, color: "#f5e8cc", marginBottom: 3 }}>{s.name}</div>
                       <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#80a870" }}>{s.reason}</div>
                       <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#c09050", marginTop: 2 }}>{s.category}</div>
                     </div>
-                    <button onClick={() => handleAdd(s)} disabled={added.has(s.name)}
-                      style={{ ...S.btnPrimary, padding: "6px 14px", fontSize: 11, flexShrink: 0, background: added.has(s.name) ? "#1a4030" : "#3a7858", color: added.has(s.name) ? "#50a878" : "#b0f0d0" }}>
-                      {added.has(s.name) ? "✓ Added" : "+ Add"}
-                    </button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0 }}>
+                      <button onClick={() => handleAdd(s)} disabled={added.has(s.name)}
+                        style={{ ...S.btnPrimary, padding: "5px 12px", fontSize: 10, background: added.has(s.name) ? "#1a4030" : "#3a7858", color: added.has(s.name) ? "#50a878" : "#b0f0d0" }}>
+                        {added.has(s.name) ? "✓ In kit" : "+ Add to Kit"}
+                      </button>
+                      <button onClick={() => handleWishlist(s)} disabled={wishlisted.has(s.name)}
+                        style={{ background: wishlisted.has(s.name) ? "rgba(80,50,10,0.5)" : "rgba(100,70,10,0.6)", border: `1px solid ${wishlisted.has(s.name) ? "#604010" : "rgba(200,150,40,0.4)"}`, color: wishlisted.has(s.name) ? "#806030" : "#e8b84a", padding: "5px 12px", borderRadius: 10, cursor: "pointer", fontSize: 10, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>
+                        {wishlisted.has(s.name) ? "✓ Wishlisted" : "⭐ Wishlist"}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </>
@@ -719,6 +736,193 @@ export default function App() {
   return <MainApp user={session.user} />;
 }
 
+// ── Wish List Modal ───────────────────────────────────────────────────────────
+const PRIORITIES = ["High", "Medium", "Low"];
+const STATUSES = ["Want", "Researching", "Ordered"];
+const PRIORITY_COLORS = { High: "#e06040", Medium: "#e8b84a", Low: "#50a878" };
+
+function WishlistModal({ user, onAddToKit, onClose }) {
+  const [wishItems, setWishItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterPriority, setFilterPriority] = useState("All");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [editItem, setEditItem] = useState(null); // null = add form hidden, item = editing
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(null);
+  const [form, setForm] = useState({ name: "", category: CATEGORIES[0], priority: "High", estimated_price: "", url: "", notes: "", status: "Want" });
+
+  useEffect(() => { fetchWishlist(); }, []);
+
+  async function fetchWishlist() {
+    setLoading(true);
+    const { data } = await supabase.from("wishlist_items").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    setWishItems(data || []);
+    setLoading(false);
+  }
+
+  function openAdd() { setForm({ name: "", category: CATEGORIES[0], priority: "High", estimated_price: "", url: "", notes: "", status: "Want" }); setEditItem(null); setShowAddForm(true); }
+  function openEdit(item) { setForm({ name: item.name, category: item.category || CATEGORIES[0], priority: item.priority || "High", estimated_price: item.estimated_price || "", url: item.url || "", notes: item.notes || "", status: item.status || "Want" }); setEditItem(item); setShowAddForm(true); }
+
+  async function saveItem() {
+    if (!form.name.trim()) return;
+    const payload = { user_id: user.id, name: form.name.trim(), category: form.category, priority: form.priority, estimated_price: parseFloat(form.estimated_price) || 0, url: form.url, notes: form.notes, status: form.status };
+    if (editItem) {
+      await supabase.from("wishlist_items").update(payload).eq("id", editItem.id);
+    } else {
+      await supabase.from("wishlist_items").insert(payload);
+    }
+    setShowAddForm(false); setEditItem(null);
+    fetchWishlist();
+  }
+
+  async function deleteItem(id) {
+    await supabase.from("wishlist_items").delete().eq("id", id);
+    setWishItems(prev => prev.filter(i => i.id !== id));
+    setConfirmDel(null);
+  }
+
+  async function markPurchased(item) {
+    // Move to gear library and remove from wishlist
+    await supabase.from("master_items").upsert({ user_id: user.id, name: item.name, lbs: 0, oz: 0, category: item.category, zone: "Other", essential: true, notes: item.notes || "" }, { onConflict: "user_id,name" });
+    await supabase.from("wishlist_items").delete().eq("id", item.id);
+    setWishItems(prev => prev.filter(i => i.id !== item.id));
+  }
+
+  const filtered = wishItems.filter(i => {
+    if (filterPriority !== "All" && i.priority !== filterPriority) return false;
+    if (filterStatus !== "All" && i.status !== filterStatus) return false;
+    return true;
+  });
+
+  const totalCost = filtered.reduce((s, i) => s + (parseFloat(i.estimated_price) || 0), 0);
+  const highPriorityCost = wishItems.filter(i => i.priority === "High").reduce((s, i) => s + (parseFloat(i.estimated_price) || 0), 0);
+
+  const inputStyle = { background: "rgba(255,240,210,0.12)", border: "1px solid rgba(220,170,80,0.35)", color: "#f8efd8", padding: "8px 12px", borderRadius: 8, fontSize: 13, fontFamily: "'Josefin Sans', sans-serif", width: "100%" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(30,15,5,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={onClose}>
+      <div style={{ background: "#3a2008", borderRadius: 22, padding: 28, width: 540, maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.5)", border: "1px solid rgba(220,170,80,0.25)", position: "relative" }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontFamily: "'Lora', serif", fontSize: 20, fontWeight: 700, color: "#f0a030" }}>⭐ Wish List</div>
+            <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#50a878", letterSpacing: "1px", marginTop: 3 }}>
+              {wishItems.length} item{wishItems.length !== 1 ? "s" : ""}
+              {totalCost > 0 && ` · $${totalCost.toFixed(0)} shown`}
+              {highPriorityCost > 0 && ` · $${highPriorityCost.toFixed(0)} high priority`}
+            </div>
+          </div>
+          <button onClick={showAddForm ? () => { setShowAddForm(false); setEditItem(null); } : openAdd}
+            style={{ background: showAddForm ? "rgba(80,20,10,0.6)" : "#3a7858", border: "none", color: showAddForm ? "#e08060" : "#b0f0d0", padding: "7px 16px", borderRadius: 14, cursor: "pointer", fontSize: 12, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>
+            {showAddForm ? "Cancel" : "+ Add Item"}
+          </button>
+        </div>
+
+        {/* Add/Edit form */}
+        {showAddForm && (
+          <div style={{ background: "rgba(255,238,200,0.08)", border: "1px solid rgba(240,195,100,0.2)", borderRadius: 14, padding: 16, marginBottom: 14 }}>
+            <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#50a878", letterSpacing: "2px", marginBottom: 10 }}>
+              {editItem ? "EDITING ITEM" : "NEW WISH LIST ITEM"}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <input value={form.name} placeholder="Item name" onChange={e => setForm(f => ({ ...f, name: e.target.value }))} onKeyDown={e => e.key === "Enter" && saveItem()} style={{ ...inputStyle, gridColumn: "1/-1" }} />
+              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ ...inputStyle, fontSize: 12 }}>
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+              <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))} style={{ ...inputStyle, fontSize: 12 }}>
+                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
+              </select>
+              <input value={form.estimated_price} placeholder="Est. price ($)" type="number" min="0" step="0.01" onChange={e => setForm(f => ({ ...f, estimated_price: e.target.value }))} style={inputStyle} />
+              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} style={{ ...inputStyle, fontSize: 12 }}>
+                {STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
+              <input value={form.url} placeholder="Product URL (optional)" onChange={e => setForm(f => ({ ...f, url: e.target.value }))} style={{ ...inputStyle, gridColumn: "1/-1" }} />
+              <input value={form.notes} placeholder="Notes (optional)" onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ ...inputStyle, gridColumn: "1/-1" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={saveItem} style={{ background: "#3a7858", border: "none", color: "#b0f0d0", padding: "8px 20px", borderRadius: 12, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "'Josefin Sans', sans-serif" }}>
+                {editItem ? "Update Item" : "Add to Wishlist"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+          {["All", ...PRIORITIES].map(p => (
+            <button key={p} onClick={() => setFilterPriority(p)}
+              style={{ background: filterPriority === p ? (PRIORITY_COLORS[p] ? `${PRIORITY_COLORS[p]}30` : "rgba(80,45,15,0.8)") : "rgba(80,45,15,0.5)", border: `1px solid ${filterPriority === p ? (PRIORITY_COLORS[p] || "#c08030") : "rgba(160,90,20,0.3)"}`, color: filterPriority === p ? (PRIORITY_COLORS[p] || "#f5e8cc") : "#c09050", padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>
+              {p}
+            </button>
+          ))}
+          <div style={{ width: 1, background: "rgba(160,90,20,0.3)", margin: "0 2px" }} />
+          {["All", ...STATUSES].map(s => (
+            <button key={s} onClick={() => setFilterStatus(s)}
+              style={{ background: filterStatus === s ? "rgba(50,100,70,0.6)" : "rgba(80,45,15,0.5)", border: `1px solid ${filterStatus === s ? "#3a7858" : "rgba(160,90,20,0.3)"}`, color: filterStatus === s ? "#80d8a0" : "#c09050", padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>
+              {s}
+            </button>
+          ))}
+        </div>
+
+        {/* Items list */}
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "24px 0", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13, color: "#50a878" }}>Loading...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "24px 0", fontFamily: "'Lora', serif", fontStyle: "italic", color: "#806040", fontSize: 14 }}>
+              {wishItems.length === 0 ? "Your wish list is empty — add gear you want to buy" : "No items match your filters"}
+            </div>
+          ) : filtered.map(item => (
+            <div key={item.id} style={{ padding: "12px 4px", borderBottom: "1px solid rgba(160,80,20,0.15)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontFamily: "'Lora', serif", fontSize: 14, color: "#f5e8cc" }}>{item.name}</span>
+                    <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 9, color: PRIORITY_COLORS[item.priority] || "#c09050", border: `1px solid ${PRIORITY_COLORS[item.priority] || "#c09050"}50`, padding: "1px 7px", borderRadius: 8 }}>{item.priority}</span>
+                    <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 9, color: "#50a878", border: "1px solid #2a6040", padding: "1px 7px", borderRadius: 8 }}>{item.status}</span>
+                    {item.estimated_price > 0 && <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#a09060" }}>${parseFloat(item.estimated_price).toFixed(0)}</span>}
+                  </div>
+                  <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#806040", marginTop: 3 }}>{item.category}</div>
+                  {item.notes && <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 12, color: "#806040", marginTop: 3 }}>{item.notes}</div>}
+                  {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#50a878", marginTop: 3, display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>🔗 {item.url}</a>}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                  <button onClick={() => onAddToKit(item)} title="Add to current kit"
+                    style={{ background: "#3a7858", border: "none", color: "#b0f0d0", padding: "4px 10px", borderRadius: 8, cursor: "pointer", fontSize: 10, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>+ Kit</button>
+                  <button onClick={() => markPurchased(item)} title="Mark as purchased — moves to gear library"
+                    style={{ background: "rgba(60,90,30,0.6)", border: "1px solid rgba(100,160,50,0.4)", color: "#90d060", padding: "4px 10px", borderRadius: 8, cursor: "pointer", fontSize: 10, fontFamily: "'Josefin Sans', sans-serif" }}>✓ Bought</button>
+                  <button onClick={() => openEdit(item)}
+                    style={{ background: "rgba(70,35,10,0.8)", border: "1px solid #7a4818", color: "#d4903a", padding: "4px 10px", borderRadius: 8, cursor: "pointer", fontSize: 10, fontFamily: "'Josefin Sans', sans-serif" }}>edit</button>
+                  <button onClick={() => setConfirmDel(item)}
+                    style={{ background: "rgba(70,15,10,0.8)", border: "1px solid #8a2010", color: "#e06040", padding: "4px 10px", borderRadius: 8, cursor: "pointer", fontSize: 10, fontFamily: "'Josefin Sans', sans-serif" }}>✕</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Confirm delete overlay */}
+        {confirmDel && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(20,10,4,0.9)", borderRadius: 22, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>🗑️</div>
+              <div style={{ fontFamily: "'Lora', serif", fontSize: 16, fontWeight: 700, color: "#f0a030", marginBottom: 8 }}>Remove from wish list?</div>
+              <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13, color: "#c0a880", marginBottom: 20 }}>"{confirmDel.name}"</div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                <button onClick={() => deleteItem(confirmDel.id)} style={{ background: "rgba(120,20,10,0.8)", border: "1px solid #8a2010", color: "#f08060", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontSize: 13, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>Remove</button>
+                <button onClick={() => setConfirmDel(null)} style={{ background: "transparent", border: "1px solid rgba(220,150,60,0.3)", color: "#c09050", padding: "10px 16px", borderRadius: 12, cursor: "pointer", fontSize: 13, fontFamily: "'Josefin Sans', sans-serif" }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button onClick={onClose} style={{ background: "transparent", border: "1px solid rgba(220,150,60,0.25)", color: "#806040", padding: "10px", borderRadius: 12, cursor: "pointer", fontSize: 13, fontFamily: "'Josefin Sans', sans-serif", marginTop: 14, width: "100%", textAlign: "center" }}>Done</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Master Gear List Modal ────────────────────────────────────────────────────
 function MasterListModal({ user, currentItems, onAddToKit, onClose }) {
   const [masterItems, setMasterItems] = useState([]);
@@ -1055,6 +1259,7 @@ function MainApp({ user }) {
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [shareItemTarget, setShareItemTarget] = useState(null);
   const [masterListOpen, setMasterListOpen] = useState(false);
+  const [wishlistOpen, setWishlistOpen] = useState(false);
 
   const [newListName, setNewListName] = useState("");
 
@@ -1389,6 +1594,7 @@ function MainApp({ user }) {
               {user.user_metadata?.avatar_url && <img src={user.user_metadata.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(220,150,60,0.4)" }} />}
               <button onClick={() => setFriendsOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>👥 Friends</button>
               <button onClick={() => setMasterListOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>📦 My Gear</button>
+              <button onClick={() => setWishlistOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>⭐ Wish List</button>
               {currentList && items.length > 0 && (
                 <button onClick={() => setPackMode(true)} style={{ background: "rgba(80,50,15,0.75)", border: "1px solid rgba(200,140,40,0.5)", color: "#e8b84a", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>🎒 Pack Mode</button>
               )}
@@ -1697,7 +1903,14 @@ function MainApp({ user }) {
 
       {/* Other modals */}
       {shareOpen && <ShareModal items={items} currentListName={currentList?.name} onClose={() => setShareOpen(false)} />}
-      {aiCheckOpen && <AICheckModal items={items} onAddItem={addSuggestedItem} onClose={() => setAiCheckOpen(false)} />}
+      {aiCheckOpen && <AICheckModal items={items} onAddItem={addSuggestedItem} onAddToWishlist={async (item) => {
+        const { error } = await supabase.from("wishlist_items").upsert({
+          user_id: user.id, name: item.name, category: item.category || "",
+          priority: item.priority || "High", notes: item.notes || "",
+          estimated_price: 0, url: "", status: "Want",
+        }, { onConflict: "user_id,name" });
+        if (!error) notify(`"${item.name}" added to wishlist ⭐`);
+      }} onClose={() => setAiCheckOpen(false)} />}
       {friendsOpen && <FriendsModal user={user} onClose={() => setFriendsOpen(false)} />}
       {shareItemTarget && <ShareItemModal item={shareItemTarget} listName={currentList?.name} user={user} onClose={() => setShareItemTarget(null)} />}
       {masterListOpen && (
@@ -1717,6 +1930,12 @@ function MainApp({ user }) {
           onClose={() => setMasterListOpen(false)}
         />
       )}
+
+      {wishlistOpen && <WishlistModal user={user} onAddToKit={async (item) => {
+        if (!currentList) { notify("Load or save a kit first"); return; }
+        await addItemToList(currentList.id, { name: item.name, lbs: "", oz: "", category: item.category || CATEGORIES[0], zone: STORAGE_ZONES[0], essential: true, notes: item.notes || "" });
+        notify(`"${item.name}" added to kit ✓`);
+      }} onClose={() => setWishlistOpen(false)} />
 
       {/* Confirm Delete Modal */}
       {confirmDelete && (
