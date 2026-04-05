@@ -281,7 +281,7 @@ function ShareModal({ items, currentListName, onClose }) {
     <div style={S.modalOverlay} onClick={onClose}>
       <div style={S.modalBox} onClick={e => e.stopPropagation()}>
         <div style={S.modalTitle}>🔗 Share Your Kit</div>
-        <div style={S.modalSub}>Send this link to your friend. They'll see your kit alongside theirs with duplicates flagged.</div>
+        <div style={S.modalSub}>Send this link to your riding partner. They'll see your kit alongside theirs with duplicates flagged.</div>
         <div style={S.label}>YOUR KIT LABEL</div>
         <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Jordan's Kit" style={{ ...S.input, marginBottom: 16 }} />
         <div style={S.label}>SHAREABLE LINK</div>
@@ -462,7 +462,7 @@ function FriendsModal({ user, onClose }) {
   return (
     <div style={S.modalOverlay} onClick={onClose}>
       <div style={S.modalBox} onClick={e => e.stopPropagation()}>
-        <div style={S.modalTitle}>👥 Friends</div>
+        <div style={S.modalTitle}>👥 Riding Partners</div>
 
         {/* Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid rgba(160,80,20,0.25)", marginBottom: 20, marginTop: 4 }}>
@@ -482,9 +482,9 @@ function FriendsModal({ user, onClose }) {
               Your friend needs to have signed into Two Cranks first. If they haven't yet, switch to the <span onClick={() => setTab("invite")} style={{ color: "#50a878", cursor: "pointer", textDecoration: "underline" }}>Invite tab</span> to send them a link.
             </div>
             {msg && <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 12, color: msg.type === "error" ? "#e07050" : "#50d898", marginBottom: 14 }}>{msg.text}</div>}
-            <div style={S.label}>YOUR FRIENDS</div>
+            <div style={S.label}>YOUR PARTNERS</div>
             {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading...</div> :
-              friends.length === 0 ? <div style={{ color: "#806040", fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13 }}>No friends added yet</div> :
+              friends.length === 0 ? <div style={{ color: "#806040", fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 13 }}>No riding partners added yet</div> :
                 friends.map(f => (
                   <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid rgba(160,80,20,0.2)" }}>
                     <div style={{ flex: 1 }}>
@@ -574,7 +574,7 @@ function ShareItemModal({ item, listName, user, onClose }) {
         <div style={S.modalTitle}>🤝 Share Item</div>
         <div style={S.modalSub}>Share <strong style={{ color: "#f5e8cc" }}>{item.name}</strong> from your <strong style={{ color: "#f5e8cc" }}>{listName || "kit"}</strong></div>
         <div style={S.label}>SEND TO</div>
-        {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading friends...</div> :
+        {loading ? <div style={{ color: "#80a060", fontFamily: "'Josefin Sans', sans-serif", fontSize: 13 }}>Loading partners...</div> :
           friends.length === 0 ? (
             <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", color: "#806040", fontSize: 13 }}>No friends added yet. Add one in the Friends section first.</div>
           ) : (
@@ -733,7 +733,7 @@ function PackModeView({ items, allZones, checkedItems, currentList, getZoneColor
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onReset} style={{ background: "rgba(80,20,10,0.6)", border: "1px solid rgba(200,80,40,0.4)", color: "#e08060", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>Reset</button>
+          <button onClick={onRequestReset} style={{ background: "rgba(80,20,10,0.6)", border: "1px solid rgba(200,80,40,0.4)", color: "#e08060", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif" }}>Reset</button>
           <button onClick={onExit} style={{ background: "#3a7858", border: "none", color: "#b0f0d0", padding: "10px 22px", borderRadius: 20, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "'Josefin Sans', sans-serif" }}>← Back to Kit</button>
         </div>
       </div>
@@ -815,6 +815,8 @@ function MainApp({ user }) {
   const [customZoneInput, setCustomZoneInput] = useState("");
   const [packMode, setPackMode] = useState(false);
   const [checkedItems, setCheckedItems] = useState(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(null); // { type: "item"|"list", id, name }
+  const [confirmReset, setConfirmReset] = useState(false);
 
   // Modals
   const [saveOpen, setSaveOpen] = useState(false);
@@ -1120,24 +1122,19 @@ function MainApp({ user }) {
           <div style={{ maxWidth: 920, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f0a030" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/>
-                  <path d="M15 6a1 1 0 0 0-1-1h-1l-5 8h8z"/><path d="m12 6 5 11"/>
-                  <path d="M5.5 14H10l3-5"/>
-                </svg>
                 <div>
                   <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 700, color: "#f0a030", lineHeight: 1 }}>Two Cranks</div>
                   <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 9, color: "#50a878", letterSpacing: "2.5px", marginTop: 2 }}>GEAR PLANNER</div>
                 </div>
               </div>
-              {currentList && <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 12, color: "#3aaa78", marginTop: 4, marginLeft: 38 }}>— {currentList.name}</div>}
+              {currentList && <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 12, color: "#3aaa78", marginTop: 4 }}>— {currentList.name}</div>}
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               {/* User avatar */}
               {user.user_metadata?.avatar_url && <img src={user.user_metadata.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(220,150,60,0.4)" }} />}
               <button onClick={() => setFriendsOpen(true)} style={{ ...S.btnGhost, fontSize: 11 }}>👥 Friends</button>
               {currentList && items.length > 0 && (
-                <button onClick={() => setPackMode(true)} style={{ background: "rgba(60,40,100,0.6)", border: "1px solid rgba(150,100,220,0.4)", color: "#c0a0f0", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>🎒 Pack Mode</button>
+                <button onClick={() => setPackMode(true)} style={{ background: "rgba(80,50,15,0.75)", border: "1px solid rgba(200,140,40,0.5)", color: "#e8b84a", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>🎒 Pack Mode</button>
               )}
               <button onClick={() => setShareOpen(true)} style={{ background: "rgba(30,80,55,0.8)", border: "1px solid #2a9068", color: "#60d898", padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>🔗 Share Kit</button>
               <button onClick={() => setLoadOpen(true)} style={S.btnSecondary}>Load</button>
@@ -1160,7 +1157,7 @@ function MainApp({ user }) {
               currentList={currentList}
               getZoneColor={getZoneColor}
               onToggle={togglePackItem}
-              onReset={resetPackingSession}
+              onRequestReset={() => setConfirmReset(true)}
               onExit={() => setPackMode(false)}
             />
           )}
@@ -1273,7 +1270,7 @@ function MainApp({ user }) {
           {items.length > 0 && (
             <div style={{ marginBottom: 18, display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => setAiCheckOpen(true)}
-                style={{ background: "rgba(60,40,100,0.6)", border: "1px solid rgba(150,100,220,0.4)", color: "#c0a0f0", padding: "9px 18px", borderRadius: 20, cursor: "pointer", fontSize: 12, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600, letterSpacing: "0.5px" }}>
+                style={{ background: "rgba(20,60,45,0.75)", border: "1px solid rgba(50,160,100,0.45)", color: "#50c888", padding: "9px 18px", borderRadius: 20, cursor: "pointer", fontSize: 12, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600, letterSpacing: "0.5px" }}>
                 🔍 Double Check My Kit
               </button>
             </div>
@@ -1341,11 +1338,11 @@ function MainApp({ user }) {
                             </div>
                             {!item.essential && <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 9, color: "#906040", border: "1px solid #5a3010", padding: "2px 7px", borderRadius: 10, flexShrink: 0 }}>optional</span>}
                             <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 13, fontWeight: 600, color: col.text, minWidth: 60, textAlign: "right", flexShrink: 0 }}><WeightDisplay oz={itemOz} /></span>
-                            <button className="action-btn" onClick={() => setShareItemTarget(item)} title="Share with a friend"
+                            <button className="action-btn" onClick={() => setShareItemTarget(item)} title="Share with riding partner"
                               style={{ background: "rgba(30,70,50,0.8)", border: "1px solid #2a7058", color: "#50c888", padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 11 }}>share</button>
                             <button className="action-btn" onClick={() => editItem(item)}
                               style={{ background: "rgba(70,35,10,0.8)", border: "1px solid #7a4818", color: "#d4903a", padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 11 }}>edit</button>
-                            <button className="action-btn" onClick={() => deleteItem(item.id)}
+                            <button className="action-btn" onClick={() => setConfirmDelete({ type: "item", id: item.id, name: item.name })}
                               style={{ background: "rgba(70,15,10,0.8)", border: "1px solid #8a2010", color: "#e06040", padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 11 }}>✕</button>
                           </div>
                           {item.notes ? <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 12, color: "#806040", marginTop: 4, marginLeft: 16 }}>{item.notes}</div> : null}
@@ -1421,7 +1418,7 @@ function MainApp({ user }) {
                   <div style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", marginTop: 2 }}>{new Date(l.created_at).toLocaleDateString()}</div>
                 </div>
                 <button onClick={() => loadList(l)} style={{ ...S.btnPrimary, padding: "6px 14px", fontSize: 12 }}>Load</button>
-                <button onClick={() => deleteList(l.id)} style={{ background: "rgba(80,20,10,0.7)", border: "1px solid #7a2010", color: "#e06040", padding: "6px 10px", borderRadius: 10, cursor: "pointer", fontSize: 12, fontFamily: "'Josefin Sans', sans-serif" }}>✕</button>
+                <button onClick={() => setConfirmDelete({ type: "list", id: l.id, name: l.name })} style={{ background: "rgba(80,20,10,0.7)", border: "1px solid #7a2010", color: "#e06040", padding: "6px 10px", borderRadius: 10, cursor: "pointer", fontSize: 12, fontFamily: "'Josefin Sans', sans-serif" }}>✕</button>
               </div>
             ))}
             <button onClick={() => setLoadOpen(false)} style={{ ...S.btnGhost, width: "100%", marginTop: 16, textAlign: "center" }}>Close</button>
@@ -1434,6 +1431,51 @@ function MainApp({ user }) {
       {aiCheckOpen && <AICheckModal items={items} onAddItem={addSuggestedItem} onClose={() => setAiCheckOpen(false)} />}
       {friendsOpen && <FriendsModal user={user} onClose={() => setFriendsOpen(false)} />}
       {shareItemTarget && <ShareItemModal item={shareItemTarget} listName={currentList?.name} user={user} onClose={() => setShareItemTarget(null)} />}
+
+      {/* Confirm Delete Modal */}
+      {confirmDelete && (
+        <div style={S.modalOverlay} onClick={() => setConfirmDelete(null)}>
+          <div style={{ ...S.modalBox, width: 360 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 32, marginBottom: 12, textAlign: "center" }}>🗑️</div>
+            <div style={{ ...S.modalTitle, textAlign: "center", fontSize: 18 }}>Are you sure?</div>
+            <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 14, color: "#c0a880", textAlign: "center", marginTop: 8, marginBottom: 24, lineHeight: 1.5 }}>
+              {confirmDelete.type === "item"
+                ? `Delete "${confirmDelete.name}" from your kit?`
+                : `Delete the list "${confirmDelete.name}"? All items in it will be removed.`}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => {
+                if (confirmDelete.type === "item") deleteItem(confirmDelete.id);
+                else deleteList(confirmDelete.id);
+                setConfirmDelete(null);
+              }} style={{ flex: 1, background: "rgba(120,20,10,0.8)", border: "1px solid #8a2010", color: "#f08060", padding: "12px", borderRadius: 12, cursor: "pointer", fontSize: 14, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>
+                Yes, delete
+              </button>
+              <button onClick={() => setConfirmDelete(null)} style={S.btnGhost}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Reset Packing Modal */}
+      {confirmReset && (
+        <div style={S.modalOverlay} onClick={() => setConfirmReset(false)}>
+          <div style={{ ...S.modalBox, width: 360 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 32, marginBottom: 12, textAlign: "center" }}>🔄</div>
+            <div style={{ ...S.modalTitle, textAlign: "center", fontSize: 18 }}>Reset packing list?</div>
+            <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontSize: 14, color: "#c0a880", textAlign: "center", marginTop: 8, marginBottom: 24, lineHeight: 1.5 }}>
+              This will uncheck all items and start your packing progress from scratch.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => { resetPackingSession(); setConfirmReset(false); }}
+                style={{ flex: 1, background: "rgba(120,20,10,0.8)", border: "1px solid #8a2010", color: "#f08060", padding: "12px", borderRadius: 12, cursor: "pointer", fontSize: 14, fontFamily: "'Josefin Sans', sans-serif", fontWeight: 600 }}>
+                Yes, reset
+              </button>
+              <button onClick={() => setConfirmReset(false)} style={S.btnGhost}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
