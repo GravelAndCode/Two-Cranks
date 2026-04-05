@@ -1931,11 +1931,17 @@ function MainApp({ user }) {
         />
       )}
 
-      {wishlistOpen && <WishlistModal user={user} onAddToKit={async (item) => {
-        if (!currentList) { notify("Load or save a kit first"); return; }
-        await addItemToList(currentList.id, { name: item.name, lbs: "", oz: "", category: item.category || CATEGORIES[0], zone: STORAGE_ZONES[0], essential: true, notes: item.notes || "" });
-        notify(`"${item.name}" added to kit ✓`);
-      }} onClose={() => setWishlistOpen(false)} />
+      {wishlistOpen && (
+        <WishlistModal
+          user={user}
+          onAddToKit={async (item) => {
+            if (!currentList) { notify("Load or save a kit first"); return; }
+            await addItemToList(currentList.id, { name: item.name, lbs: "", oz: "", category: item.category || CATEGORIES[0], zone: STORAGE_ZONES[0], essential: true, notes: item.notes || "" });
+            notify(`"${item.name}" added to kit ✓`);
+          }}
+          onClose={() => setWishlistOpen(false)}
+        />
+      )}
 
       {/* Confirm Delete Modal */}
       {confirmDelete && (
