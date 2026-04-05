@@ -544,6 +544,7 @@ function ShareItemModal({ item, listName, user, onClose }) {
       from_user_id: user.id,
       from_user_name: user.user_metadata?.full_name || user.email,
       to_user_id: selected,
+      item_id: item.id,
       item_name: item.name,
       item_lbs: item.lbs,
       item_oz: item.oz,
@@ -554,6 +555,10 @@ function ShareItemModal({ item, listName, user, onClose }) {
       from_list_name: listName || "My Kit",
       status: "pending",
     });
+    // Mark original item as shared with this person
+    await supabase.from("items").update({
+      shared_with_name: friend?.friend_name || friend?.friend_email || "a friend",
+    }).eq("id", item.id);
     setSent(true);
   }
 
@@ -624,12 +629,14 @@ function SharedItemsInbox({ user, lists, onAccepted }) {
       list_id: listId,
       user_id: user.id,
       name: share.item_name,
-      lbs: share.item_lbs,
-      oz: share.item_oz,
+      lbs: 0,
+      oz: 0,
       category: share.item_category,
       zone: share.item_zone,
       essential: share.item_essential,
-      notes: share.item_notes ? `Shared by ${share.from_user_name}: ${share.item_notes}` : `Shared by ${share.from_user_name}`,
+      notes: share.item_notes || "",
+      shared_from_item_id: share.item_id || null,
+      shared_from_user_name: share.from_user_name,
     });
     await supabase.from("shared_items").update({ status: "accepted" }).eq("id", share.id);
     setPending(prev => prev.filter(p => p.id !== share.id));
@@ -1236,6 +1243,15 @@ function MainApp({ user }) {
     if (editId) {
       const { error } = await supabase.from("items").update(itemData).eq("id", editId);
       if (error) { notify(`Error updating: ${error.message}`); return; }
+      // Sync changes to anyone who has a reference to this item
+      await supabase.from("items").update({
+        name: data.name,
+        category: data.category,
+        zone: data.zone,
+        essential: data.essential,
+        notes: data.notes || "",
+        // Note: lbs/oz stay 0 on recipient side — they don't carry the weight
+      }).eq("shared_from_item_id", editId);
       // Also update in master list if it exists there
       await supabase.from("master_items").update({
         lbs: itemData.lbs, oz: itemData.oz, category: itemData.category,
@@ -1303,8 +1319,8 @@ function MainApp({ user }) {
 
   const getZoneColor = (zone) => STORAGE_COLORS[zone] || { bg: "#4a4030", text: "#e8d898", dot: "#b09050" };
 
-  const totalOz = items.reduce((s, i) => s + toOz(i.lbs, i.oz), 0);
-  const essentialOz = items.filter(i => i.essential).reduce((s, i) => s + toOz(i.lbs, i.oz), 0);
+  const totalOz = items.filter(i => !i.shared_from_item_id).reduce((s, i) => s + toOz(i.lbs, i.oz), 0);
+  const essentialOz = items.filter(i => i.essential && !i.shared_from_item_id).reduce((s, i) => s + toOz(i.lbs, i.oz), 0);
 
   const filtered = items.filter(i => {
     if (filterZone !== "All" && i.zone !== filterZone) return false;
@@ -1316,7 +1332,7 @@ function MainApp({ user }) {
   const groupedByZone = allZones.map(zone => ({
     zone,
     items: filtered.filter(i => i.zone === zone),
-    totalOz: filtered.filter(i => i.zone === zone).reduce((s, i) => s + toOz(i.lbs, i.oz), 0),
+    totalOz: filtered.filter(i => i.zone === zone && !i.shared_from_item_id).reduce((s, i) => s + toOz(i.lbs, i.oz), 0),
   })).filter(g => g.items.length > 0);
 
   const toggleZone = (zone) => setCollapsedZones(z => ({ ...z, [zone]: !z[zone] }));
@@ -1567,7 +1583,9 @@ function MainApp({ user }) {
                 {!collapsed && (
                   <div style={{ background: "rgba(40,20,6,0.65)", borderRadius: "0 0 14px 14px", border: `1px solid ${col.bg}`, borderTop: "none", overflow: "hidden" }}>
                     {zoneItems.map((item, idx) => {
-                      const itemOz = toOz(item.lbs, item.oz);
+                      const itemOz = item.shared_from_item_id ? 0 : toOz(item.lbs, item.oz);
+                      const isSharedFrom = !!item.shared_from_item_id;
+                      const isSharedWith = !!item.shared_with_name;
                       return (
                         <div key={item.id} className="item-row" style={{ padding: "10px 16px", borderBottom: idx < zoneItems.length - 1 ? "1px solid rgba(160,80,20,0.15)" : "none" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1577,7 +1595,18 @@ function MainApp({ user }) {
                               <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 10, color: "#906040", marginLeft: 8 }}>{item.category}</span>
                             </div>
                             {!item.essential && <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 9, color: "#906040", border: "1px solid #5a3010", padding: "2px 7px", borderRadius: 10, flexShrink: 0 }}>optional</span>}
-                            <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 13, fontWeight: 600, color: col.text, minWidth: 60, textAlign: "right", flexShrink: 0 }}><WeightDisplay oz={itemOz} /></span>
+                            {isSharedWith && (
+                              <span title={`Shared with ${item.shared_with_name}`} style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 9, color: "#50c888", border: "1px solid #2a7058", padding: "2px 7px", borderRadius: 10, flexShrink: 0 }}>
+                                🤝 {item.shared_with_name}
+                              </span>
+                            )}
+                            {isSharedFrom ? (
+                              <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 11, color: "#806040", flexShrink: 0, fontStyle: "italic" }}>
+                                carried by {item.shared_from_user_name?.split(" ")[0] || "sharer"}
+                              </span>
+                            ) : (
+                              <span style={{ fontFamily: "'Josefin Sans', sans-serif", fontSize: 13, fontWeight: 600, color: col.text, minWidth: 60, textAlign: "right", flexShrink: 0 }}><WeightDisplay oz={itemOz} /></span>
+                            )}
                             <button className="action-btn" onClick={() => setShareItemTarget(item)} title="Share with riding partner"
                               style={{ background: "rgba(30,70,50,0.8)", border: "1px solid #2a7058", color: "#50c888", padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 11 }}>share</button>
                             <button className="action-btn" onClick={() => editItem(item)}
@@ -1601,7 +1630,7 @@ function MainApp({ user }) {
               <div style={S.label}>BAG WEIGHT BREAKDOWN</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {allZones.map(zone => {
-                  const zOz = items.filter(i => i.zone === zone).reduce((s, i) => s + toOz(i.lbs, i.oz), 0);
+                  const zOz = items.filter(i => i.zone === zone && !i.shared_from_item_id).reduce((s, i) => s + toOz(i.lbs, i.oz), 0);
                   if (!zOz) return null;
                   const col = getZoneColor(zone);
                   const pct = totalOz > 0 ? Math.round((zOz / totalOz) * 100) : 0;
